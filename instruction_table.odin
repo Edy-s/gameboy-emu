@@ -1,15 +1,45 @@
 #+private file
 package main
 
+import "core:fmt"
+
+B :: proc(bit_pattern: string) -> (result: Bit_Field) {
+  result.type = .bit_pattern
+  result.bit_count = len(bit_pattern)
+  for char in bit_pattern {
+    result.value = result.value << 1
+    switch char {
+    case '1':
+      result.value |= 1
+    case '0':
+    case:
+      panic(fmt.aprintf("Bit pattern should only have 1's and 0's, but this one had a %v. Full string: %v\n", char, bit_pattern))
+    }
+  }
+  return
+}
+
+R8 ::     Bit_Field{.r8, 0, 3}
+R16 ::    Bit_Field{.r16, 0, 2}
+R16STK :: Bit_Field{.r16stk, 0, 2}
+R16MEM :: Bit_Field{.r16mem, 0, 2}
+
+IMM8 ::  Bit_Field{.imm8, 0, 8}
+IMM16 :: Bit_Field{.imm16, 0, 16}
+
+BIT_INDEX :: Bit_Field{.bit_index, 0, 3}
+TGT3 :: Bit_Field{.tgt3, 0, 3}
+CC :: Bit_Field{.cc, 0, 2}
+
 
 @(private)
 opcode_table := [?]Op_Encoding{
   {.nop, {}, {B("00000000")}},
   
-  {.ld, {dest = .r16, src = .imm16}, {B("00"), R16, B("0001"), IMM16}},
-  {.ld, {dest_a = .r16mem, src = .a},  {B("00"), R16, B("0010")}},
-  {.ld, {dest = .a, src_a = .r16mem},  {B("00"), R16, B("1010")}},
-  {.ld, {dest_a = .imm16, src = .sp},  {B("00"), B("00"), B("1000"), IMM16}},
+  {.ld, {dest = .r16, src = .imm16},  {B("00"), R16, B("0001"), IMM16}},
+  {.ld, {dest_a = .r16mem, src = .a}, {B("00"), R16, B("0010")}},
+  {.ld, {dest = .a, src_a = .r16mem}, {B("00"), R16, B("1010")}},
+  {.ld, {dest_a = .imm16, src = .sp}, {B("00"), B("00"), B("1000"), IMM16}},
   
   {.inc, {dest = .r16}, {B("00"), R16, B("0011")}},
   {.dec, {dest = .r16}, {B("00"), R16, B("1011")}},
@@ -27,8 +57,8 @@ opcode_table := [?]Op_Encoding{
   {.scf, {}, {B("00"), B("110"), B("111")}},
   {.ccf, {}, {B("00"), B("111"), B("111")}},
   
-  {.jmp, {jmp = .relative},                  {B("00"), B("011"),   B("000"), IMM8}},
-  {.jmp, {jmp = .relative, cond = true}, {B("00"), B("1"), CC, B("000"), IMM8}},
+  {.jmp, {jmp_delta = true},              {B("00"), B("011"),   B("000"), IMM8}},
+  {.jmp, {jmp_delta = true, cond = true}, {B("00"), B("1"), CC, B("000"), IMM8}},
   
   {.stop, {}, {B("00010000"), IMM8}}, // Potentially shouldn't take the 2nd byte, instead skip 1 instruction on execution
   
@@ -89,6 +119,7 @@ opcode_table := [?]Op_Encoding{
   {.ei, {}, {B("11"), B("111011")}},
 }
 
+@(private)
 opcode_table_prefixed := [?]Op_Encoding{
   {.rot, {dest = .r8, rot = .l}, {B("00"), B("000"), R8}},
   {.rot, {dest = .r8, rot = .r}, {B("00"), B("001"), R8}},
