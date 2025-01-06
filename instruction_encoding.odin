@@ -58,6 +58,8 @@ Operators :: enum {
   di, ei,
   
   prefix,
+  
+  illegal,
 }
 
 Term :: struct {

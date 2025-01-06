@@ -10,14 +10,24 @@ main :: proc() {
     return
   }
   
-  
-  instruction_pointer := 0x150
+  nopsed := 0
+  instruction_pointer := 0x100
+  prefixed := false
   
   for true {
     // fmt.printf("%x\n", file[instruction_pointer])
     
     found := false
-    for opcode, i in opcode_table {
+    
+    table : []Op_Encoding
+    if !prefixed {
+      table = opcode_table[:]
+    } else {
+      table = opcode_table_prefixed[:]
+      // prefixed = false
+    }
+    
+    for opcode, i in table {
       temp_ip := instruction_pointer
       current_byte := file[temp_ip]
       
@@ -54,10 +64,12 @@ main :: proc() {
           }
           
           if encoding.type == .imm8 {
+            assert(bit_offset == 0, "Immediate encoding before all bits were extracted!\n")
             temp_ip += 1
             instruction.terms[encoding.term].value8 = file[temp_ip]
           }
           if encoding.type == .imm16 {
+            assert(bit_offset == 0, "Immediate encoding before all bits were extracted!\n")
             temp_ip += 2
             instruction.terms[encoding.term].value16 = (u16(file[temp_ip]) << 8) | (u16(file[temp_ip]))
           }
@@ -75,9 +87,35 @@ main :: proc() {
         temp_ip += 1
         instruction_pointer = temp_ip
         
-        fmt.printf("Op: %v\n", instruction.op)
+        if instruction.op == .prefix {
+          prefixed = true
+          break
+        }
+        
+        if instruction.op == .nop {
+          nopsed += 1
+        } else {
+          if nopsed != 0 {
+            fmt.printf("Op: nop x%v\n", nopsed)
+            nopsed = 0
+          }
+          
+          fmt.printf("Op: %v", instruction.op)
+          if prefixed {
+            fmt.printf(" prefixed!")
+            prefixed = false
+          }
+          fmt.println()
+        }
+        
+        
         break
       }
+    }
+    
+    if !found {
+      fmt.printf("No instruction found! Byte of note: %8b / %2x, at %x\n", file[instruction_pointer], file[instruction_pointer], instruction_pointer)
+      break
     }
   }
 }
