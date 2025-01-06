@@ -3,9 +3,8 @@ package main
 
 import "core:fmt"
 
-B :: proc(bit_pattern: string) -> (result: Bit_Field) {
-  result.type = .bit_pattern
-  result.bit_count = len(bit_pattern)
+B :: proc(bit_pattern: string) -> (result: Bit_Pattern) {
+  result.bit_count = u16(len(bit_pattern))
   for char in bit_pattern {
     result.value = result.value << 1
     switch char {
@@ -19,101 +18,104 @@ B :: proc(bit_pattern: string) -> (result: Bit_Field) {
   return
 }
 
-R8 ::     Bit_Field{.r8, 0, 3}
-R16 ::    Bit_Field{.r16, 0, 2}
-R16STK :: Bit_Field{.r16stk, 0, 2}
-R16MEM :: Bit_Field{.r16mem, 0, 2}
+D :: proc(op_type: Op_Param_Type) -> (result: Op_Param) {
+  result.type = op_type
+  result.term = .dest
+  return
+}
 
-IMM8 ::  Bit_Field{.imm8, 0, 8}
-IMM16 :: Bit_Field{.imm16, 0, 16}
+S :: proc(op_type: Op_Param_Type) -> (result: Op_Param) {
+  result.type = op_type
+  result.term = .source
+  return
+}
 
-BIT_INDEX :: Bit_Field{.bit_index, 0, 3}
-TGT3 :: Bit_Field{.tgt3, 0, 3}
-CC :: Bit_Field{.cc, 0, 2}
-
+O :: proc(op_type: Op_Param_Type) -> (result: Op_Param) {
+  result.type = op_type
+  return
+}
 
 @(private)
 opcode_table := [?]Op_Encoding{
   {.nop, {}, {B("00000000")}},
   
-  {.ld, {dest = .r16, src = .imm16},  {B("00"), R16, B("0001"), IMM16}},
-  {.ld, {dest_a = .r16mem, src = .a}, {B("00"), R16, B("0010")}},
-  {.ld, {dest = .a, src_a = .r16mem}, {B("00"), R16, B("1010")}},
-  {.ld, {dest_a = .imm16, src = .sp}, {B("00"), B("00"), B("1000"), IMM16}},
+  {.ld, {}, {B("00"), D(.r16),    B("0001"), S(.imm16)}},
+  {.ld, {}, {B("00"), D(.r16mem), B("0010"), S(.a)}},
+  {.ld, {}, {B("00"), S(.r16mem), B("1010"), D(.a)}},
+  {.ld, {}, {B("00"), B("00"),    B("1000"), D(.imm16), S(.sp)}},
   
-  {.inc, {dest = .r16}, {B("00"), R16, B("0011")}},
-  {.dec, {dest = .r16}, {B("00"), R16, B("1011")}},
-  {.add, {dest = .hl, src = .r16}, {B("00"), R16, B("1001")}},
+  {.inc, {}, {B("00"), D(.r16), B("0011")}},
+  {.dec, {}, {B("00"), D(.r16), B("1011")}},
+  {.add, {}, {B("00"), S(.r16), B("1001"), D(.hl)}},
   
-  {.ld, {dest = .r8, src = .imm8}, {B("00"), R8,  B("110"), IMM8}},
+  {.ld, {}, {B("00"), D(.r8), B("110"), S(.imm8)}},
   
-  {.rot, {dest = .a, rot = .l}, {B("00"), B("000"), B("111")}},
-  {.rot, {dest = .a, rot = .r}, {B("00"), B("001"), B("111")}},
-  {.rot, {dest = .a, rot = .l, rot_carry = true}, {B("00"), B("010"), B("111")}},
-  {.rot, {dest = .a, rot = .r, rot_carry = true}, {B("00"), B("011"), B("111")}},
+  {.rot, {rot = .l}, {B("00"), B("000"), B("111"), D(.a)}},
+  {.rot, {rot = .r}, {B("00"), B("001"), B("111"), D(.a)}},
+  {.rot, {rot = .l, rot_carry = true}, {B("00"), B("010"), B("111"), D(.a)}},
+  {.rot, {rot = .r, rot_carry = true}, {B("00"), B("011"), B("111"), D(.a)}},
   
   {.daa, {}, {B("00"), B("100"), B("111")}},
   {.cpl, {}, {B("00"), B("101"), B("111")}},
   {.scf, {}, {B("00"), B("110"), B("111")}},
   {.ccf, {}, {B("00"), B("111"), B("111")}},
   
-  {.jmp, {jmp_delta = true},              {B("00"), B("011"),   B("000"), IMM8}},
-  {.jmp, {jmp_delta = true, cond = true}, {B("00"), B("1"), CC, B("000"), IMM8}},
+  {.jmp, {jmp_delta = true},              {B("00"), B("011"),   B("000"), S(.imm8)}},
+  {.jmp, {jmp_delta = true, cond = true}, {B("00"), B("1"), O(.cond), B("000"), S(.imm8)}},
   
-  {.stop, {}, {B("00010000"), IMM8}}, // Potentially shouldn't take the 2nd byte, instead skip 1 instruction on execution
-  
-  
-  {.ld, {dest = .r8, src = .r8}, {B("01"), R8, R8}},
+  {.stop, {}, {B("00010000")}}, // Must skip an instruction!
   
   {.halt, {}, {B("01"), B("110110")}},
   
-  {.add, {dest = .a, src = .r8},                   {B("10"), B("000"), R8}},
-  {.add, {dest = .a, src = .r8, use_carry = true}, {B("10"), B("001"), R8}},
-  {.sub, {dest = .a, src = .r8},                   {B("10"), B("010"), R8}},
-  {.sub, {dest = .a, src = .r8, use_carry = true}, {B("10"), B("011"), R8}},
-  {.and, {dest = .a, src = .r8},                   {B("10"), B("100"), R8}},
-  {.xor, {dest = .a, src = .r8},                   {B("10"), B("100"), R8}},
-  {.or,  {dest = .a, src = .r8},                   {B("10"), B("100"), R8}},
-  {.cp,  {dest = .a, src = .r8},                   {B("10"), B("100"), R8}},
+  {.ld, {}, {B("01"), D(.r8), S(.r8)}},
+  
+  {.add, {},                 {B("10"), B("000"), S(.r8), D(.a)}},
+  {.add, {use_carry = true}, {B("10"), B("001"), S(.r8), D(.a)}},
+  {.sub, {},                 {B("10"), B("010"), S(.r8), D(.a)}},
+  {.sub, {use_carry = true}, {B("10"), B("011"), S(.r8), D(.a)}},
+  {.and, {},                 {B("10"), B("100"), S(.r8), D(.a)}},
+  {.xor, {},                 {B("10"), B("101"), S(.r8), D(.a)}},
+  {.or,  {},                 {B("10"), B("110"), S(.r8), D(.a)}},
+  {.cp,  {},                 {B("10"), B("111"), S(.r8), D(.a)}},
   
   
-  {.add, {dest = .a, src = .imm8},                   {B("11"), B("000"), B("110"), IMM8}},
-  {.add, {dest = .a, src = .imm8, use_carry = true}, {B("11"), B("001"), B("110"), IMM8}},
-  {.sub, {dest = .a, src = .imm8},                   {B("11"), B("010"), B("110"), IMM8}},
-  {.sub, {dest = .a, src = .imm8, use_carry = true}, {B("11"), B("011"), B("110"), IMM8}},
-  {.and, {dest = .a, src = .imm8},                   {B("11"), B("100"), B("110"), IMM8}},
-  {.xor, {dest = .a, src = .imm8},                   {B("11"), B("100"), B("110"), IMM8}},
-  {.or,  {dest = .a, src = .imm8},                   {B("11"), B("100"), B("110"), IMM8}},
-  {.cp,  {dest = .a, src = .imm8},                   {B("11"), B("100"), B("110"), IMM8}},
+  {.add, {},                 {B("11"), B("000"), B("110"), D(.a), S(.imm8)}},
+  {.add, {use_carry = true}, {B("11"), B("001"), B("110"), D(.a), S(.imm8)}},
+  {.sub, {},                 {B("11"), B("010"), B("110"), D(.a), S(.imm8)}},
+  {.sub, {use_carry = true}, {B("11"), B("011"), B("110"), D(.a), S(.imm8)}},
+  {.and, {},                 {B("11"), B("100"), B("110"), D(.a), S(.imm8)}},
+  {.xor, {},                 {B("11"), B("101"), B("110"), D(.a), S(.imm8)}},
+  {.or,  {},                 {B("11"), B("110"), B("110"), D(.a), S(.imm8)}},
+  {.cp,  {},                 {B("11"), B("111"), B("110"), D(.a), S(.imm8)}},
   
-  {.ret, {cond = true}, {B("11"), B("0"), CC, B("000")}},
+  {.ret, {cond = true}, {B("11"), B("0"), O(.cond), B("000")}},
   {.ret,  {}, {B("11"), B("001"), B("001")}},
   {.reti, {}, {B("11"), B("011"), B("001")}},
   
-  {.jmp, {cond = true, src = .imm8}, {B("11"), B("0"), CC, B("010"), IMM8}},
-  {.jmp, {src = .imm8}, {B("11"), B("000"), B("011"), IMM8}},
-  {.jmp, {src = .hl},   {B("11"), B("101"), B("001")}},
+  {.jmp, {cond = true}, {B("11"), B("0"), O(.cond), B("010"), S(.imm8)}},
+  {.jmp, {},            {B("11"), B("000"),         B("011"), S(.imm8)}},
+  {.jmp, {},            {B("11"), B("101"),         B("001"), S(.hl)}},
   
-  {.call, {cond = true, src = .imm16}, {B("11"), B("0"), CC, B("100"), IMM16}},
-  {.call, {src = .imm16},              {B("11"), B("001"), B("101"), IMM16}},
+  {.call, {cond = true}, {B("11"), B("0"), O(.cond), B("100"), S(.imm16)}},
+  {.call, {},            {B("11"), B("001"),         B("101"), S(.imm16)}},
   
-  {.rst, {src = .tgt3}, {B("11"), TGT3, B("111")}},
+  {.rst, {}, {B("11"), S(.tgt3), B("111")}},
   
-  {.pop,  {dest = .r16stk}, {B("11"), R16STK, B("0001")}},
-  {.push, {dest = .r16stk}, {B("11"), R16STK, B("0101")}},
+  {.pop,  {}, {B("11"), S(.r16stk), B("0001")}},
+  {.push, {}, {B("11"), S(.r16stk), B("0101")}},
   
   {.prefix, {}, {B("11"), B("001011")}},
   
-  {.ld, {dest_a = .c, src = .a},     {B("11"), B("100010")}},
-  {.ld, {dest_a = .imm8, src = .a},  {B("11"), B("100000"), IMM8}},
-  {.ld, {dest_a = .imm16, src = .a}, {B("11"), B("101010"), IMM16}},
-  {.ld, {dest = .a, src_a = .c},     {B("11"), B("110010")}},
-  {.ld, {dest = .a, src_a = .imm8},  {B("11"), B("110000"), IMM8}},
-  {.ld, {dest = .a, src_a = .imm16}, {B("11"), B("111010"), IMM16}},
+  {.ld, {}, {B("11"), B("100010"), D(.c_addr), S(.a)}},
+  {.ld, {}, {B("11"), B("100000"), D(.imm8_addr), S(.a)}},
+  {.ld, {}, {B("11"), B("101010"), D(.imm16_addr), S(.a)}},
+  {.ld, {}, {B("11"), B("110010"), D(.a), S(.c_addr)}},
+  {.ld, {}, {B("11"), B("110000"), D(.a), S(.imm8_addr)}},
+  {.ld, {}, {B("11"), B("111010"), D(.a), S(.imm16_addr)}},
   
-  {.add, {dest = .sp, src = .imm8}, {B("11"), B("101000"), IMM8}},
-  {.ld, {dest = .hl, src = .e8}, {B("11"), B("111000"), IMM8}},
-  {.ld, {dest = .sp, src = .hl}, {B("11"), B("111001")}},
+  {.add, {}, {B("11"), B("101000"), D(.sp), S(.imm8)}},
+  {.ld, {},  {B("11"), B("111000"), D(.hl), S(.e8)}},
+  {.ld, {},  {B("11"), B("111001"), D(.sp), S(.hl)}},
   
   {.di, {}, {B("11"), B("110011")}},
   {.ei, {}, {B("11"), B("111011")}},
@@ -121,16 +123,16 @@ opcode_table := [?]Op_Encoding{
 
 @(private)
 opcode_table_prefixed := [?]Op_Encoding{
-  {.rot, {dest = .r8, rot = .l}, {B("00"), B("000"), R8}},
-  {.rot, {dest = .r8, rot = .r}, {B("00"), B("001"), R8}},
-  {.rot, {dest = .r8, rot = .l, rot_carry = true}, {B("00"), B("010"), R8}},
-  {.rot, {dest = .r8, rot = .r, rot_carry = true}, {B("00"), B("011"), R8}},
-  {.sla, {dest = .r8}, {B("00"), B("100"), R8}},
-  {.sra, {dest = .r8}, {B("00"), B("101"), R8}},
-  {.srl, {dest = .r8}, {B("00"), B("111"), R8}},
-  {.swap, {dest = .r8}, {B("00"), B("110"), R8}},
+  {.rot, {rot = .l}, {B("00"), B("000"), D(.r8)}},
+  {.rot, {rot = .r}, {B("00"), B("001"), D(.r8)}},
+  {.rot, {rot = .l, rot_carry = true}, {B("00"), B("010"), D(.r8)}},
+  {.rot, {rot = .r, rot_carry = true}, {B("00"), B("011"), D(.r8)}},
+  {.sla, {},  {B("00"), B("100"), D(.r8)}},
+  {.sra, {},  {B("00"), B("101"), D(.r8)}},
+  {.srl, {},  {B("00"), B("111"), D(.r8)}},
+  {.swap, {}, {B("00"), B("110"), D(.r8)}},
   
-  {.bit, {dest = .r8}, {B("01"), BIT_INDEX, R8}},
-  {.res, {dest = .r8}, {B("10"), BIT_INDEX, R8}},
-  {.set, {dest = .r8}, {B("11"), BIT_INDEX, R8}},
+  {.bit, {}, {B("01"), O(.bi3), D(.r8)}},
+  {.res, {}, {B("10"), O(.bi3), D(.r8)}},
+  {.set, {}, {B("11"), O(.bi3), D(.r8)}},
 }
