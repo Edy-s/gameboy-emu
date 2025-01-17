@@ -3,38 +3,6 @@ package main
 
 import "core:fmt"
 
-B :: proc(bit_pattern: string) -> (result: Bit_Pattern) {
-  result.bit_count = u16(len(bit_pattern))
-  for char in bit_pattern {
-    result.value = result.value << 1
-    switch char {
-    case '1':
-      result.value |= 1
-    case '0':
-    case:
-      panic(fmt.aprintf("Bit pattern should only have 1's and 0's, but this one had a %v. Full string: %v\n", char, bit_pattern))
-    }
-  }
-  return
-}
-
-D :: proc(op_type: Op_Param_Type) -> (result: Op_Param) {
-  result.type = op_type
-  result.term = .dest
-  return
-}
-
-S :: proc(op_type: Op_Param_Type) -> (result: Op_Param) {
-  result.type = op_type
-  result.term = .source
-  return
-}
-
-O :: proc(op_type: Op_Param_Type) -> (result: Op_Param) {
-  result.type = op_type
-  return
-}
-
 @(private)
 opcode_table := [?]Op_Encoding{
   // Block 0
@@ -153,4 +121,36 @@ opcode_table_prefixed := [?]Op_Encoding{
   {.bit, {}, {B("01"), O(.bi3), D(.r8)}},
   {.res, {}, {B("10"), O(.bi3), D(.r8)}},
   {.set, {}, {B("11"), O(.bi3), D(.r8)}},
+}
+
+B :: proc(bit_pattern: string) -> (result: Bit_Pattern) {
+  result.bit_count = u16(len(bit_pattern))
+  for char in bit_pattern {
+    result.value = result.value << 1
+    switch char {
+    case '1':
+      result.value |= 1
+    case '0':
+    case:
+      panic(fmt.aprintf("Bit pattern should only have 1's and 0's, but this one had a %v. Full string: %v\n", char, bit_pattern))
+    }
+  }
+  return
+}
+
+D :: proc(op_type: Op_Param_Type) -> (result: Op_Param) {
+  result.type = op_type
+  result.term = .dest
+  return
+}
+
+S :: proc(op_type: Op_Param_Type) -> (result: Op_Param) {
+  result.type = op_type
+  result.term = .source
+  return
+}
+
+O :: proc(op_type: Op_Param_Type) -> (result: Op_Param) {
+  result.type = op_type
+  return
 }

@@ -23,7 +23,9 @@ Op_Param :: struct {
   type: Op_Param_Type,
 }
 
-Op_Param_Type :: enum { 
+Op_Param_Type :: enum {
+  NOT_SET,
+  
   r8, r16, r16stk, r16mem, cond, bi3, tgt3, // Actual parameters
   imm8, imm16, imm8_addr, imm16_addr, e8, // Extra bytes
   a, sp, hl, c_addr, // "Built-In" operands
@@ -38,7 +40,9 @@ Op_Param_Type_Sizes := #partial [Op_Param_Type]u8 {
 Op_Param_Term :: enum { none, dest, source }
 
 Operators :: enum {
-  nop = 1,
+  NOT_SET,
+  
+  nop,
   
   ld, swap,
   
