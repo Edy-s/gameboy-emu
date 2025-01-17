@@ -37,6 +37,7 @@ O :: proc(op_type: Op_Param_Type) -> (result: Op_Param) {
 
 @(private)
 opcode_table := [?]Op_Encoding{
+  // Block 0
   {.nop, {}, {B("00000000")}},
   
   {.ld, {}, {B("00"), D(.r16),    B("0001"), S(.imm16)}},
@@ -68,10 +69,12 @@ opcode_table := [?]Op_Encoding{
   
   {.stop, {}, {B("00010000")}}, // Must skip an instruction!
   
+  // Block 1
   {.halt, {}, {B("01"), B("110110")}},
   
   {.ld, {}, {B("01"), D(.r8), S(.r8)}},
   
+  // Block 2
   {.add, {},                 {B("10"), B("000"), S(.r8), D(.a)}},
   {.add, {use_carry = true}, {B("10"), B("001"), S(.r8), D(.a)}},
   {.sub, {},                 {B("10"), B("010"), S(.r8), D(.a)}},
@@ -81,7 +84,7 @@ opcode_table := [?]Op_Encoding{
   {.or,  {},                 {B("10"), B("110"), S(.r8), D(.a)}},
   {.cp,  {},                 {B("10"), B("111"), S(.r8), D(.a)}},
   
-  
+  // Block 3
   {.add, {},                 {B("11"), B("000"), B("110"), D(.a), S(.imm8)}},
   {.add, {use_carry = true}, {B("11"), B("001"), B("110"), D(.a), S(.imm8)}},
   {.sub, {},                 {B("11"), B("010"), B("110"), D(.a), S(.imm8)}},
@@ -95,8 +98,8 @@ opcode_table := [?]Op_Encoding{
   {.ret,  {}, {B("11"), B("001"), B("001")}},
   {.reti, {}, {B("11"), B("011"), B("001")}},
   
-  {.jmp, {cond = true}, {B("11"), B("0"), O(.cond), B("010"), S(.imm8)}},
-  {.jmp, {},            {B("11"), B("000"),         B("011"), S(.imm8)}},
+  {.jmp, {cond = true}, {B("11"), B("0"), O(.cond), B("010"), S(.imm16)}},
+  {.jmp, {},            {B("11"), B("000"),         B("011"), S(.imm16)}},
   {.jmp, {},            {B("11"), B("101"),         B("001"), S(.hl)}},
   
   {.call, {cond = true}, {B("11"), B("0"), O(.cond), B("100"), S(.imm16)}},

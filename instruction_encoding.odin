@@ -38,7 +38,7 @@ Op_Param_Type_Sizes := #partial [Op_Param_Type]u8 {
 Op_Param_Term :: enum { none, dest, source }
 
 Operators :: enum {
-  nop,
+  nop = 1,
   
   ld, swap,
   

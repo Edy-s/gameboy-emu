@@ -11,21 +11,15 @@ main :: proc() {
   }
   
   nopsed := 0
-  instruction_pointer := 0x100
+  instruction_pointer :u16= 0x100
   prefixed := false
+  running := true
   
-  for true {
-    // fmt.printf("%x\n", file[instruction_pointer])
-    
+  for running {
     found := false
     
-    table : []Op_Encoding
-    if !prefixed {
-      table = opcode_table[:]
-    } else {
-      table = opcode_table_prefixed[:]
-      // prefixed = false
-    }
+    table := !prefixed ? opcode_table[:] : opcode_table_prefixed[:]
+    instruction : Instruction
     
     for opcode, i in table {
       temp_ip := instruction_pointer
@@ -34,7 +28,7 @@ main :: proc() {
       bit_offset :u16= 8
       valid := true
       
-      instruction : Instruction
+      instruction = {}
       instruction.op = opcode.op
       
       for encoding_union in opcode.encodings {
@@ -46,7 +40,6 @@ main :: proc() {
           comparison_result := encoding.value ~ extracted_bits
           if comparison_result != 0 {
             valid = false
-            break
           }
         
         case Op_Param:
@@ -71,20 +64,24 @@ main :: proc() {
           if encoding.type == .imm16 {
             assert(bit_offset == 0, "Immediate encoding before all bits were extracted!\n")
             temp_ip += 2
-            instruction.terms[encoding.term].value16 = (u16(file[temp_ip]) << 8) | (u16(file[temp_ip]))
+            instruction.terms[encoding.term].value16 = (u16(file[temp_ip]) << 8) | (u16(file[temp_ip-1]))
           }
         }
+        
+        if !valid { break }
       }
       
-      if bit_offset != 0 {
+      if valid && bit_offset != 0 {
         fmt.printf("Op: %v, idx: %v, bit_of: %v\n", instruction.op, i, bit_offset)
         
-        panic("Bad instruction encoding.\n")
+        panic("Bad instruction encoding; non-zero bit offset.\n")
       }
       
       if valid {
         found = true
         temp_ip += 1
+        
+        prev_ip := instruction_pointer // temp variable for printing
         instruction_pointer = temp_ip
         
         if instruction.op == .prefix {
@@ -100,7 +97,7 @@ main :: proc() {
             nopsed = 0
           }
           
-          fmt.printf("Op: %v", instruction.op)
+          fmt.printf("Op: %v, 0x: %x, 0b: %b", instruction.op, file[prev_ip], file[prev_ip])
           if prefixed {
             fmt.printf(" prefixed!")
             prefixed = false
@@ -116,6 +113,24 @@ main :: proc() {
     if !found {
       fmt.printf("No instruction found! Byte of note: %8b / %2x, at %x\n", file[instruction_pointer], file[instruction_pointer], instruction_pointer)
       break
+    }
+    
+    if instruction.op != .nop {
+      fmt.printf("instr: %v\n", instruction)
+      #partial switch instruction.op {
+      case .jmp:
+        if instruction.terms[.source].type == .imm16 {
+          instruction_pointer = instruction.terms[.source].value16
+          instruction.terms[.source] = {}
+        }
+      case:
+      }
+      
+      instruction.op = Operators(0)
+      if instruction != {} {
+        fmt.printf("Instruction not implemented!\n", instruction.op)
+        running = false
+      }
     }
   }
 }
