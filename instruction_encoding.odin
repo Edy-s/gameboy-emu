@@ -2,15 +2,14 @@ package main
 
 Op_Encoding :: struct {
   op: Operators,
-  params: struct {
-    // dest, dest_a, src, src_a: CPU_Locations,
-    rot: enum {l, r},
-    rot_carry: bool,
-    use_carry: bool,
-    jmp_delta: bool,
-    cond: bool,
-  },
+  modifiers: bit_set[Op_Modifiers],
   encodings: []union { Bit_Pattern, Op_Param },
+}
+
+Op_Modifiers :: enum {
+  rot_l, rot_r, rot_carry,
+  use_carry,
+  jmp_delta,
 }
 
 Bit_Pattern :: struct {
@@ -79,4 +78,5 @@ Instruction :: struct {
   
   set_params: bit_set[Op_Param_Type],
   params: [Op_Param_Type]u8,
+  modifiers: bit_set[Op_Modifiers],
 }

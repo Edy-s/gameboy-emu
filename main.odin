@@ -9,6 +9,12 @@ Registers :: enum {
 Fat_Registers :: enum {
   AF, BC, DE, HL
 }
+Flags :: enum u8 {
+  Zero       = 0x1,
+  Negative   = 0x2,
+  Half_Carry = 0x4,
+  Carry      = 0x8,
+}
 
 registers : [Registers]u8
 stack_pointer : u16
@@ -45,6 +51,7 @@ main :: proc() {
       
       instruction = {}
       instruction.op = opcode.op
+      instruction.modifiers = opcode.modifiers
       
       for encoding_union in opcode.encodings {
         switch encoding in encoding_union {
@@ -131,15 +138,63 @@ main :: proc() {
     }
     
     if instruction.op != .nop {
+      assert(instruction.op != .illegal)
+      
       fmt.printf("%v\n\n", instruction)
+      unmodified_instruction := instruction
+      
       dest_term   := &instruction.terms[.dest]
       source_term := &instruction.terms[.source]
       #partial switch instruction.op {
       case .jmp:
-        if source_term.type == .imm16 {
-          instruction_pointer = source_term.value16
-          source_term^ = {}
+        Jump_Condition :: enum u8 { NOT_SET, nz, z, nc, c }
+        condition: Jump_Condition
+        if .cond in instruction.set_params {
+          condition = Jump_Condition(instruction.params[.cond] + 1)
+          instruction.set_params -= {.cond}
+          instruction.params[.cond] = 0
         }
+        
+        condition_met := false
+        switch condition {
+        case .nz:
+          flag := get_flag(.Zero)
+          condition_met = (flag == 0)
+        case .z:
+          flag := get_flag(.Zero)
+          condition_met = (flag != 0)
+        case .nc:
+          flag := get_flag(.Carry)
+          condition_met = (flag == 0)
+        case .c:
+          flag := get_flag(.Carry)
+          condition_met = (flag != 0)
+        case .NOT_SET:
+          condition_met = true
+        }
+        
+        if condition_met {
+          if .jmp_delta in instruction.modifiers {
+            if source_term.type == .imm8 {
+              change_value : u16 = transmute(u16)(i16(transmute(i8)source_term.value8))
+              instruction_pointer += change_value
+              
+              source_term^ = {}
+              instruction.modifiers -= {.jmp_delta}
+            }
+          } else {
+            if source_term.type == .imm16 {
+              instruction_pointer = source_term.value16
+              source_term^ = {}
+            }
+          }
+        } else {
+          source_term^ = {}
+          instruction.modifiers -= {.jmp_delta}
+        }
+        
+        instruction.op = Operators(0)
+        
       case .ld:
         source_value_8:     u8
         source_value_8_set: bool
@@ -150,6 +205,10 @@ main :: proc() {
         
         if source_term.type != .NOT_SET {
           #partial switch source_term.type {
+          case .a:
+            source_value_8 = registers[.A]
+            source_value_8_set = true
+            source_term^ = {}
           case .imm8:
             source_value_8 = source_term.value8
             source_value_8_set = true
@@ -163,11 +222,29 @@ main :: proc() {
             source_value_8 = r8_to_byte(source_term.value8)^
             source_value_8_set = true
             source_term^ = {}
+          case .r16mem:
+            if source_term.value8 == 2 || source_term.value8 == 3 {
+              address := fat_register_value(.HL)
+              source_value_8 = main_ram[address]
+              source_value_8_set = true
+              
+              if source_term.value8 == 2 { address += 1 }
+              else                       { address -= 1 }
+              put_u16_to_fat_register(.HL, address)
+              
+              source_term^ = {}
+            }
           }
         }
         
         if dest_term.type != .NOT_SET {
           #partial switch dest_term.type {
+          case .a:
+            assert(source_value_8_set, "Trying to put a 8-bit value into 8-bit register, but 8-bit value was not set.")
+            
+            registers[.A] = source_value_8
+            
+            dest_term^ = {}
           case .r16:
             assert(source_value_16_set, "Trying to put a 16-bit value into 16-bit register, but 16-bit value was not set.")
             
@@ -182,14 +259,52 @@ main :: proc() {
             dest_byte^ = source_value_8
             
             dest_term^ = {}
+          case .r16mem:
+            assert(source_value_8_set, "Trying to put a 8-bit value into 8-bit register, but 8-bit value was not set.")
+            if dest_term.value8 == 2 || dest_term.value8 == 3 {
+              address := fat_register_value(.HL)
+              main_ram[address] = source_value_8
+              
+              if dest_term.value8 == 2 { address += 1 }
+              else                     { address -= 1 }
+              put_u16_to_fat_register(.HL, address)
+              
+              dest_term^ = {}
+            } else {
+              fat_reg := r16_to_fat_register(source_term.value8)
+              address := fat_register_value(fat_reg)
+              
+              main_ram[address] = source_value_8
+              
+              dest_term^ = {}
+            }
           }
         }
         
         assert(times_mem_hl_was_seen != 2, "We got to the point of trying to do ld [hl], [hl] , but this should instead be a halt instruction.")
+        instruction.op = Operators(0)
+        
+      case .inc:
+        assert(dest_term.type != .NOT_SET)
+        #partial switch dest_term.type {
+        case .r8:
+          target_byte := r8_to_byte(dest_term.value8)
+          target_byte^ += 1
+          
+          if target_byte^ == 0 { set_flag(.Zero) }
+          clear_flag(.Negative)
+          if (target_byte^ & 0xF) == 0 {
+            // Lower 4 bits overflow
+            set_flag(.Half_Carry)
+          }
+          
+          dest_term^ = {}
+        }
+        instruction.op = Operators(0)
+        
       case:
       }
       
-      instruction.op = Operators(0)
       if instruction != {} {
         fmt.printf("Instruction not implemented!\n")
         fmt.printf("Number of instructions executed: %v\n", number_of_instructions_executed_succesfully)
@@ -270,3 +385,18 @@ r8_to_byte :: proc(r8_val: u8) -> ^u8 {
   return result
 }
 
+get_flag :: proc(flag: Flags) -> u8 {
+  flag_byte := registers[.F]
+  flag_bit := flag_byte & u8(flag)
+  return flag_bit
+}
+
+set_flag :: proc(flag: Flags) {
+  flag_byte := &registers[.F]
+  flag_byte^ |= u8(flag)
+}
+
+clear_flag :: proc(flag: Flags) {
+  flag_byte := &registers[.F]
+  flag_byte^ &= ~u8(flag)
+}
