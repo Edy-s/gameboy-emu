@@ -2,6 +2,7 @@ package main
 
 import "core:os"
 import "core:fmt"
+print :: fmt.printf
 
 Registers :: enum {
   A, F, B, C, D, E, H, L
@@ -18,18 +19,23 @@ Flags :: enum u8 {
 
 registers : [Registers]u8
 stack_pointer : u16
-instruction_pointer :u16= 0x100
+instruction_pointer :u16= 0x0 //0x100
 
-main_ram : [0xFFFFF]u8
+memory_map : [0xFFFFF]u8
 
 number_of_instructions_executed_succesfully := 0
+
+// FULL_DEBUG_PRINT :: true
 
 main :: proc() {
   file, ok := os.read_entire_file_from_filename("D:/codes/gameboy_emulator/gb-test-roms/cpu_instrs/individual/09-op r,r.gb")
   if !ok {
-    fmt.printf("Couldn't read file\n")
+    print("Couldn't read file\n")
     return
   }
+  
+  assert(len(file[:])-1 == 0x7FFF)
+  copy(memory_map[0x0000:0x7FFF], file[:])
   
   nopsed := 0
   
@@ -44,7 +50,7 @@ main :: proc() {
     
     for opcode, i in table {
       temp_ip := instruction_pointer
-      current_byte := file[temp_ip]
+      current_byte := memory_map[temp_ip]
       
       bit_offset :u16= 8
       valid := true
@@ -81,12 +87,12 @@ main :: proc() {
           if encoding.type == .imm8 {
             assert(bit_offset == 0, "Immediate encoding before all bits were extracted!\n")
             temp_ip += 1
-            instruction.terms[encoding.term].value8 = file[temp_ip]
+            instruction.terms[encoding.term].value8 = memory_map[temp_ip]
           }
           if encoding.type == .imm16 {
             assert(bit_offset == 0, "Immediate encoding before all bits were extracted!\n")
             temp_ip += 2
-            instruction.terms[encoding.term].value16 = (u16(file[temp_ip]) << 8) | (u16(file[temp_ip-1]))
+            instruction.terms[encoding.term].value16 = (u16(memory_map[temp_ip]) << 8) | (u16(memory_map[temp_ip-1]))
           }
         }
         
@@ -94,7 +100,7 @@ main :: proc() {
       }
       
       if valid && bit_offset != 0 {
-        fmt.printf("Op: %v, idx: %v, bit_of: %v\n", instruction.op, i, bit_offset)
+        print("Op: %v, idx: %v, bit_of: %v\n", instruction.op, i, bit_offset)
         
         panic("Bad instruction encoding; non-zero bit offset.\n")
       }
@@ -103,8 +109,14 @@ main :: proc() {
         found = true
         temp_ip += 1
         
+        
         prev_ip := instruction_pointer // temp variable for printing
         instruction_pointer = temp_ip
+        
+        if instruction_pointer > 0xFEA0 {
+          print("End of the line.\n")
+          running = false
+        }
         
         if instruction.op == .prefix {
           prefixed = true
@@ -115,13 +127,13 @@ main :: proc() {
           nopsed += 1
         } else {
           if nopsed != 0 {
-            fmt.printf("Op: nop x%v\n", nopsed)
+            print("Op: nop x%v\n", nopsed)
             nopsed = 0
           }
           
-          fmt.printf("Op: %v, 0x: %2x, 0b: %8b, at: %d", instruction.op, file[prev_ip], file[prev_ip], prev_ip)
+          print("Op: %v, 0x: %2x, 0b: %8b, at: %d", instruction.op, memory_map[prev_ip], memory_map[prev_ip], prev_ip)
           if prefixed {
-            fmt.printf(" prefixed!")
+            print(" prefixed!")
             prefixed = false
           }
           fmt.println()
@@ -133,18 +145,21 @@ main :: proc() {
     }
     
     if !found {
-      fmt.printf("No instruction found! Byte of note: %8b / %2x, at %x\n", file[instruction_pointer], file[instruction_pointer], instruction_pointer)
+      print("No instruction found! Byte of note: %8b / %2x, at %x\n", memory_map[instruction_pointer], memory_map[instruction_pointer], instruction_pointer)
       break
     }
     
     if instruction.op != .nop {
-      assert(instruction.op != .illegal)
+      pretty_print_instruction(instruction)
+      print("\n")
       
-      fmt.printf("%v\n\n", instruction)
+      assert(instruction.op != .illegal)
       unmodified_instruction := instruction
       
       dest_term   := &instruction.terms[.dest]
       source_term := &instruction.terms[.source]
+      
+      
       #partial switch instruction.op {
       case .jmp:
         Jump_Condition :: enum u8 { NOT_SET, nz, z, nc, c }
@@ -203,39 +218,52 @@ main :: proc() {
         
         times_mem_hl_was_seen := 0
         
+        print("Loaded from")
+        
         if source_term.type != .NOT_SET {
           #partial switch source_term.type {
           case .a:
             source_value_8 = registers[.A]
             source_value_8_set = true
+            
+            print(" reg_a: %v", registers[.A])
             source_term^ = {}
           case .imm8:
             source_value_8 = source_term.value8
             source_value_8_set = true
+            
+            print(" imm8: %v", source_term.value8)
             source_term^ = {}
           case .imm16:
             source_value_16 = source_term.value16
             source_value_16_set = true
+            
+            print(" imm16: %v", source_term.value16)
             source_term^ = {}
           case .r8:
             if source_term.value8 == 6 { times_mem_hl_was_seen += 1}
             source_value_8 = r8_to_byte(source_term.value8)^
             source_value_8_set = true
+            
+            print(" r8: %v", source_term.value8)
             source_term^ = {}
           case .r16mem:
             if source_term.value8 == 2 || source_term.value8 == 3 {
               address := fat_register_value(.HL)
-              source_value_8 = main_ram[address]
+              source_value_8 = memory_map[address]
               source_value_8_set = true
               
               if source_term.value8 == 2 { address += 1 }
               else                       { address -= 1 }
               put_u16_to_fat_register(.HL, address)
               
+              print(" r16mem: %v", source_value_8)
               source_term^ = {}
             }
           }
         }
+        
+        print(" into")
         
         if dest_term.type != .NOT_SET {
           #partial switch dest_term.type {
@@ -244,6 +272,7 @@ main :: proc() {
             
             registers[.A] = source_value_8
             
+            print(" reg_a")
             dest_term^ = {}
           case .r16:
             assert(source_value_16_set, "Trying to put a 16-bit value into 16-bit register, but 16-bit value was not set.")
@@ -251,6 +280,7 @@ main :: proc() {
             fat_reg := r16_to_fat_register(dest_term.value8)
             put_u16_to_fat_register(fat_reg, source_value_16)
             
+            print(" r16: %v", fat_reg)
             dest_term^ = {}
           case .r8:
             assert(source_value_8_set, "Trying to put a 8-bit value into 8-bit register, but 8-bit value was not set.")
@@ -258,28 +288,33 @@ main :: proc() {
             dest_byte := r8_to_byte(dest_term.value8)
             dest_byte^ = source_value_8
             
+            print(" r8: %v", dest_term.value8)
             dest_term^ = {}
           case .r16mem:
             assert(source_value_8_set, "Trying to put a 8-bit value into 8-bit register, but 8-bit value was not set.")
             if dest_term.value8 == 2 || dest_term.value8 == 3 {
               address := fat_register_value(.HL)
-              main_ram[address] = source_value_8
+              memory_map[address] = source_value_8
               
               if dest_term.value8 == 2 { address += 1 }
               else                     { address -= 1 }
               put_u16_to_fat_register(.HL, address)
               
+              print(" r16mem: HL")
               dest_term^ = {}
             } else {
-              fat_reg := r16_to_fat_register(source_term.value8)
+              fat_reg := r16_to_fat_register(dest_term.value8)
               address := fat_register_value(fat_reg)
               
-              main_ram[address] = source_value_8
+              memory_map[address] = source_value_8
               
+              print(" r16mem: %v", fat_reg)
               dest_term^ = {}
             }
           }
         }
+        
+        print("\n\n")
         
         assert(times_mem_hl_was_seen != 2, "We got to the point of trying to do ld [hl], [hl] , but this should instead be a halt instruction.")
         instruction.op = Operators(0)
@@ -291,12 +326,34 @@ main :: proc() {
           target_byte := r8_to_byte(dest_term.value8)
           target_byte^ += 1
           
-          if target_byte^ == 0 { set_flag(.Zero) }
+          is_zero := (target_byte^ == 0)
+          do_flag(.Zero, is_zero)
+          
           clear_flag(.Negative)
-          if (target_byte^ & 0xF) == 0 {
-            // Lower 4 bits overflow
-            set_flag(.Half_Carry)
-          }
+          
+          // Lower 4 bits overflow.
+          is_overflow := ((target_byte^ & 0xF) == 0)
+          do_flag(.Half_Carry, is_overflow)
+          
+          dest_term^ = {}
+        }
+        instruction.op = Operators(0)
+      
+      case .dec:
+        assert(dest_term.type != .NOT_SET)
+        #partial switch dest_term.type {
+        case .r8:
+          target_byte := r8_to_byte(dest_term.value8)
+          target_byte^ -= 1
+          
+          is_zero := (target_byte^ == 0)
+          do_flag(.Zero, is_zero)
+          
+          set_flag(.Negative)
+          
+          // Lower 4 bits underflow.
+          is_underflow := (((target_byte^ & 0xF) ~ 0xF) == 0)
+          do_flag(.Half_Carry, is_underflow)
           
           dest_term^ = {}
         }
@@ -305,15 +362,29 @@ main :: proc() {
       case:
       }
       
+      {
+        A  := registers[.A]
+        B  := registers[.B]
+        C  := registers[.C]
+        D  := registers[.D]
+        E  := registers[.E]
+        H  := registers[.H]
+        L  := registers[.L]
+        BC := fat_register_value(.BC)
+        DE := fat_register_value(.DE)
+        HL := fat_register_value(.HL)
+        x := 1.2 // Debug point
+      }
+      
       if instruction != {} {
-        fmt.printf("Instruction not implemented!\n")
-        fmt.printf("Number of instructions executed: %v\n", number_of_instructions_executed_succesfully)
+        print("Instruction not implemented!\n")
         running = false
       }
       
       number_of_instructions_executed_succesfully += 1
     }
   }
+  print("Number of instructions executed: %v\n", number_of_instructions_executed_succesfully)
 }
 
 
@@ -327,7 +398,7 @@ r16_to_fat_register :: proc(r16_val: u8) -> (result: Fat_Registers) {
     result = .HL
   case 3:
     result = .AF
-    fmt.printf("Questionable if this should happen!\n")
+    print("Questionable if this should happen!\n")
   case:
     panic("Illegal r16 value.")
   }
@@ -349,8 +420,8 @@ put_u16_to_fat_register :: proc(fat_reg: Fat_Registers, value: u16) {
   left_reg  := &registers[l]
   right_reg := &registers[r]
   
-  left_reg^  = u8(value & 0xFF)
-  right_reg^ = u8((value & 0xFF00) >> 8)
+  left_reg^  = u8((value & 0xFF00) >> 8)
+  right_reg^ = u8(value & 0xFF)
 }
 
 fat_to_two_registers :: proc(fat_reg: Fat_Registers) -> (left, right: Registers) {
@@ -379,7 +450,7 @@ r8_to_byte :: proc(r8_val: u8) -> ^u8 {
   } else {
     // Maybe shouldn't handle the [hl] case here
     address := fat_register_value(.HL)
-    result = &main_ram[address]
+    result = &memory_map[address]
   }
   
   return result
@@ -391,6 +462,14 @@ get_flag :: proc(flag: Flags) -> u8 {
   return flag_bit
 }
 
+do_flag :: proc(flag: Flags, set: bool) {
+  if set {
+    set_flag(flag)
+  } else {
+    clear_flag(flag)
+  }
+}
+
 set_flag :: proc(flag: Flags) {
   flag_byte := &registers[.F]
   flag_byte^ |= u8(flag)
@@ -399,4 +478,14 @@ set_flag :: proc(flag: Flags) {
 clear_flag :: proc(flag: Flags) {
   flag_byte := &registers[.F]
   flag_byte^ &= ~u8(flag)
+}
+
+
+pretty_print_instruction :: proc(instr: Instruction) {
+  using reflect
+  fields := struct_fields_zipped(type_of(instr))
+  for field in fields {
+    val := struct_field_value(instr, field)
+    print("%v = %v\n", field.name, val)
+  }
 }
