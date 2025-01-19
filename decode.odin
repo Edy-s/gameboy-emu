@@ -11,7 +11,7 @@ decode_next_instruction :: proc() -> Instruction {
   instruction, found := match_opcode(opcode_table[:])
   
   if found && instruction.op == .prefix {
-    prefixed := true
+    prefixed = true
     instruction, found = match_opcode(opcode_table_prefixed[:])
   }
     

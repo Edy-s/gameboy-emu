@@ -84,8 +84,8 @@ Instruction :: struct {
 import "core:reflect"
 pretty_print_instruction :: proc(instr: Instruction) {
   zeroed_instr :: Instruction{}
-  using reflect
-  fields := struct_fields_zipped(type_of(instr))
+  rfl :: reflect
+  fields := rfl.struct_fields_zipped(type_of(instr))
   
   longest_field_name := 0
   padding := "                                             "
@@ -94,9 +94,9 @@ pretty_print_instruction :: proc(instr: Instruction) {
   }
   
   for field in fields {
-    val := struct_field_value(instr, field)
-    nil_val := struct_field_value(zeroed_instr, field)
-    if !equal(val, nil_val, true) {
+    val := rfl.struct_field_value(instr, field)
+    nil_val := rfl.struct_field_value(zeroed_instr, field)
+    if !rfl.equal(val, nil_val, true) {
       
       padding_amount := longest_field_name - len(field.name)
       print("%v%v = %v\n", padding[:padding_amount], field.name, val)

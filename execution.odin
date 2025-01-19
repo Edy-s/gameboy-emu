@@ -2,15 +2,14 @@
 package main
 
 @(private)
-execute_instruction :: proc(instruction: Instruction) -> bool {
-  instruction := instruction
+execute_instruction :: proc(source_instruction: Instruction) -> bool {
+  instruction := source_instruction
   success := true
   
   if instruction.op != .nop {
     if !print_instruction_on_fail_only do pretty_print_instruction(instruction)
     
     assert(instruction.op != .illegal)
-    unmodified_instruction := instruction
     
     dest_term   := &instruction.dest_term
     source_term := &instruction.source_term
@@ -46,7 +45,8 @@ execute_instruction :: proc(instruction: Instruction) -> bool {
       if condition_met {
         if .jmp_delta in instruction.modifiers {
           if source_term.type == .imm8 {
-            change_value : u16 = transmute(u16)(i16(transmute(i8)source_term.value8))
+            change_value : u16 = u16(i16(i8(source_term.value8)))
+            
             instruction_pointer += change_value
             
             source_term^ = {}
@@ -212,6 +212,12 @@ execute_instruction :: proc(instruction: Instruction) -> bool {
         do_flag(.Half_Carry, is_overflow)
         
         dest_term^ = {}
+        
+      case .r16:
+        target_reg := r16_mapping[dest_term.value8]
+        regs_word[target_reg] += 1
+        
+        dest_term^ = {}
       }
       instruction.op = Operators(0)
     
@@ -235,15 +241,70 @@ execute_instruction :: proc(instruction: Instruction) -> bool {
       }
       instruction.op = Operators(0)
     
-    case .ei:
-      interrupt_master_flag = 1
-      instruction.op = Operators(0)
+    // case .ei:
+    //   interrupt_master_flag = 1
+    //   instruction.op = Operators(0)
       
     case .di:
       interrupt_master_flag = 0
       instruction.op = Operators(0)
     
-    case:
+    case .call:
+      assert(source_term.type == .imm16)
+    
+      stack_pointer := &regs_word[.SP]
+      stack_pointer^ -= 1
+      memory_map[stack_pointer^] = u8(instruction_pointer >> 8)
+      stack_pointer^ -= 1
+      memory_map[stack_pointer^] = u8(instruction_pointer & 0xFF)
+      
+      instruction_pointer = source_term.value16
+      
+      source_term^ = {}
+      instruction.op = Operators(0)
+    
+    case .ret:
+      stack_pointer := &regs_word[.SP]
+      lo_byte := memory_map[stack_pointer^]
+      stack_pointer^ += 1
+      hi_byte := memory_map[stack_pointer^]
+      stack_pointer^ += 1
+      
+      instruction_pointer = u16(hi_byte) << 8 | u16(lo_byte)
+      
+      instruction.op = Operators(0)
+      
+    case .push:
+      assert(source_term.type == .r16stk)
+      
+      source_reg := r16stk_mapping[source_term.value8]
+      hi_reg, lo_reg := word_to_byte_registers(source_reg)
+      hi_byte, lo_byte := regs_byte[hi_reg], regs_byte[lo_reg]
+      
+      stack_pointer := &regs_word[.SP]
+      stack_pointer^ -= 1
+      memory_map[stack_pointer^] = hi_byte
+      stack_pointer^ -= 1
+      memory_map[stack_pointer^] = lo_byte
+      
+      source_term^ = {}
+      instruction.op = Operators(0)
+    
+    case .pop:
+      assert(source_term.type == .r16stk)
+      
+      stack_pointer := &regs_word[.SP]
+      lo_byte := memory_map[stack_pointer^]
+      stack_pointer^ += 1
+      hi_byte := memory_map[stack_pointer^]
+      stack_pointer^ += 1
+      
+      target_reg := r16stk_mapping[source_term.value8]
+      hi_reg, lo_reg := word_to_byte_registers(target_reg)
+      regs_byte[hi_reg], regs_byte[lo_reg] = hi_byte, lo_byte
+      
+      source_term^ = {}
+      instruction.op = Operators(0)
     }
     
     if instruction != {} {
@@ -257,6 +318,13 @@ execute_instruction :: proc(instruction: Instruction) -> bool {
 
 r16_mapping :=    [?]Reg_16bit{.BC, .DE, .HL, .SP}
 r16stk_mapping := [?]Reg_16bit{.BC, .DE, .HL, .AF}
+
+word_to_byte_registers :: proc(word_reg: Reg_16bit) -> (hi, lo: Reg_8bit) {
+  hi = Reg_8bit(u8(word_reg) * 2 + 1)
+  lo = Reg_8bit(u8(word_reg) * 2)
+  
+  return
+}
 
 r8_to_byte :: proc(r8_val: u8) -> ^u8 {
   result: ^u8

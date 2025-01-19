@@ -5,7 +5,7 @@ import "core:fmt"
 print :: fmt.printf
 
 Reg_8bit :: enum {
-  // Order is swapped to match hi- and lo- bit status in the register union.
+  // Order is swapped to match hi- and lo- byte status in the register union.
   F, A,
   C, B,
   E, D,
@@ -43,6 +43,7 @@ print_instruction_on_fail_only := true
 
 main :: proc() {
   file, ok := os.read_entire_file_from_filename("D:/codes/gameboy_emulator/gb-test-roms/cpu_instrs/individual/09-op r,r.gb")
+  // file, ok := os.read_entire_file_from_filename("D:/codes/gameboy_emulator/gb-test-roms/cpu_instrs/individual/06-ld r,r.gb")
   if !ok {
     print("Couldn't read file\n")
     return
@@ -75,7 +76,9 @@ main :: proc() {
       BC := regs_word[.BC]
       DE := regs_word[.DE]
       HL := regs_word[.HL]
-      x := 1.2 // Debug point
+      if false {
+        print("", A, B, C, D, E, H, L, BC, DE, HL)
+      }
     }
     
     if execution_succeded {
