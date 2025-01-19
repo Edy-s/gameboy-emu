@@ -122,32 +122,40 @@ execute_instruction :: proc(instruction: Instruction) -> bool {
       // print(" into")
       
       if dest_term.type != .NOT_SET {
+        {
+          byte_destinations : bit_set[Op_Param_Type] = {.a, .r8, .r16mem, .imm8_addr, .imm16_addr}
+          word_destinations : bit_set[Op_Param_Type] = {.r16}
+          if dest_term.type in byte_destinations {
+            assert(source_value_8_set, "Trying to put a 8-bit value into 8-bit register, but 8-bit value was not set.")
+          }
+          if dest_term.type in word_destinations {
+            assert(source_value_16_set, "Trying to put a 16-bit value into 16-bit register, but 16-bit value was not set.")
+          } 
+        }
+        
         #partial switch dest_term.type {
         case .a:
-          assert(source_value_8_set, "Trying to put a 8-bit value into 8-bit register, but 8-bit value was not set.")
-          
           regs_byte[.A] = source_value_8
           
           // print(" reg_a")
           dest_term^ = {}
-        case .r16:
-          assert(source_value_16_set, "Trying to put a 16-bit value into 16-bit register, but 16-bit value was not set.")
           
+        case .r16:
           fat_reg := r16_mapping[dest_term.value8]
           regs_word[fat_reg] = source_value_16
           
           // print(" r16: %v", fat_reg)
           dest_term^ = {}
+          
         case .r8:
-          assert(source_value_8_set, "Trying to put a 8-bit value into 8-bit register, but 8-bit value was not set.")
           if dest_term.value8 == 6 { times_mem_hl_was_seen += 1}
           dest_byte := r8_to_byte(dest_term.value8)
           dest_byte^ = source_value_8
           
           // print(" r8: %v", dest_term.value8)
           dest_term^ = {}
+          
         case .r16mem:
-          assert(source_value_8_set, "Trying to put a 8-bit value into 8-bit register, but 8-bit value was not set.")
           if dest_term.value8 == 2 || dest_term.value8 == 3 {
             address := regs_word[.HL]
             memory_map[address] = source_value_8
@@ -167,6 +175,18 @@ execute_instruction :: proc(instruction: Instruction) -> bool {
             // print(" r16mem: %v", fat_reg)
             dest_term^ = {}
           }
+          
+        case .imm16_addr:
+          address := dest_term.value16
+          memory_map[address] = source_value_8
+          
+          dest_term^ = {}
+          
+        case .imm8_addr:
+          address := 0xFF00 + u16(dest_term.value8)
+          memory_map[address] = source_value_8
+          
+          dest_term^ = {}
         }
       }
       

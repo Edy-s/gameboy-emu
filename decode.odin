@@ -89,12 +89,12 @@ match_opcode :: proc(op_table: []Op_Encoding) -> (Instruction, bool) {
           instr_term.value8 = extracted_bits
         }
         
-        if encoding.type == .imm8 {
+        if encoding.type == .imm8 || encoding.type == .imm8_addr {
           assert(bit_offset == 0, "Immediate encoding before all bits were extracted!\n")
           temp_ip += 1
           instr_term.value8 = memory_map[temp_ip]
         }
-        if encoding.type == .imm16 {
+        if encoding.type == .imm16 || encoding.type == .imm16_addr {
           assert(bit_offset == 0, "Immediate encoding before all bits were extracted!\n")
           temp_ip += 2
           instr_term.value16 = (u16(memory_map[temp_ip]) << 8) | (u16(memory_map[temp_ip-1]))

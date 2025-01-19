@@ -65,16 +65,16 @@ main :: proc() {
     execution_succeded := execute_instruction(instruction)
     
     {
-      A  := &regs_byte[.A]
-      B  := &regs_byte[.B]
-      C  := &regs_byte[.C]
-      D  := &regs_byte[.D]
-      E  := &regs_byte[.E]
-      H  := &regs_byte[.H]
-      L  := &regs_byte[.L]
-      BC := &regs_word[.BC]
-      DE := &regs_word[.DE]
-      HL := &regs_word[.HL]
+      A  := regs_byte[.A]
+      B  := regs_byte[.B]
+      C  := regs_byte[.C]
+      D  := regs_byte[.D]
+      E  := regs_byte[.E]
+      H  := regs_byte[.H]
+      L  := regs_byte[.L]
+      BC := regs_word[.BC]
+      DE := regs_word[.DE]
+      HL := regs_word[.HL]
       x := 1.2 // Debug point
     }
     
