@@ -481,6 +481,7 @@ clear_flag :: proc(flag: Flags) {
 }
 
 
+import "core:reflect"
 pretty_print_instruction :: proc(instr: Instruction) {
   using reflect
   fields := struct_fields_zipped(type_of(instr))
