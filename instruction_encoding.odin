@@ -86,11 +86,20 @@ pretty_print_instruction :: proc(instr: Instruction) {
   zeroed_instr :: Instruction{}
   using reflect
   fields := struct_fields_zipped(type_of(instr))
+  
+  longest_field_name := 0
+  padding := "                                             "
+  for field in fields {
+    longest_field_name = max(len(field.name), longest_field_name)
+  }
+  
   for field in fields {
     val := struct_field_value(instr, field)
     nil_val := struct_field_value(zeroed_instr, field)
     if !equal(val, nil_val, true) {
-      print("%v = %v\n", field.name, val)
+      
+      padding_amount := longest_field_name - len(field.name)
+      print("%v%v = %v\n", padding[:padding_amount], field.name, val)
     }
   }
   print("\n")

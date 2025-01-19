@@ -79,7 +79,7 @@ execute_instruction :: proc(instruction: Instruction) -> bool {
       if source_term.type != .NOT_SET {
         #partial switch source_term.type {
         case .a:
-          source_value_8 = registers[.A]
+          source_value_8 = registers.byte[.A]
           source_value_8_set = true
           
           // print(" reg_a: %v", registers[.A])
@@ -105,13 +105,13 @@ execute_instruction :: proc(instruction: Instruction) -> bool {
           source_term^ = {}
         case .r16mem:
           if source_term.value8 == 2 || source_term.value8 == 3 {
-            address := fat_register_value(.HL)
+            address := regs_word[.HL]
             source_value_8 = memory_map[address]
             source_value_8_set = true
             
             if source_term.value8 == 2 { address += 1 }
             else                       { address -= 1 }
-            put_u16_to_fat_register(.HL, address)
+            regs_word[.HL] = address
             
             // print(" r16mem: %v", source_value_8)
             source_term^ = {}
@@ -126,15 +126,15 @@ execute_instruction :: proc(instruction: Instruction) -> bool {
         case .a:
           assert(source_value_8_set, "Trying to put a 8-bit value into 8-bit register, but 8-bit value was not set.")
           
-          registers[.A] = source_value_8
+          regs_byte[.A] = source_value_8
           
           // print(" reg_a")
           dest_term^ = {}
         case .r16:
           assert(source_value_16_set, "Trying to put a 16-bit value into 16-bit register, but 16-bit value was not set.")
           
-          fat_reg := r16_to_fat_register(dest_term.value8)
-          put_u16_to_fat_register(fat_reg, source_value_16)
+          fat_reg := r16_mapping[dest_term.value8]
+          regs_word[fat_reg] = source_value_16
           
           // print(" r16: %v", fat_reg)
           dest_term^ = {}
@@ -149,18 +149,18 @@ execute_instruction :: proc(instruction: Instruction) -> bool {
         case .r16mem:
           assert(source_value_8_set, "Trying to put a 8-bit value into 8-bit register, but 8-bit value was not set.")
           if dest_term.value8 == 2 || dest_term.value8 == 3 {
-            address := fat_register_value(.HL)
+            address := regs_word[.HL]
             memory_map[address] = source_value_8
             
             if dest_term.value8 == 2 { address += 1 }
             else                     { address -= 1 }
-            put_u16_to_fat_register(.HL, address)
+            regs_word[.HL] = address
             
             // print(" r16mem: HL")
             dest_term^ = {}
           } else {
-            fat_reg := r16_to_fat_register(dest_term.value8)
-            address := fat_register_value(fat_reg)
+            fat_reg := r16_mapping[dest_term.value8]
+            address := regs_word[fat_reg]
             
             memory_map[address] = source_value_8
             
@@ -214,7 +214,15 @@ execute_instruction :: proc(instruction: Instruction) -> bool {
         dest_term^ = {}
       }
       instruction.op = Operators(0)
+    
+    case .ei:
+      interrupt_master_flag = 1
+      instruction.op = Operators(0)
       
+    case .di:
+      interrupt_master_flag = 0
+      instruction.op = Operators(0)
+    
     case:
     }
     
@@ -227,70 +235,20 @@ execute_instruction :: proc(instruction: Instruction) -> bool {
   return success
 }
 
-
-r16_to_fat_register :: proc(r16_val: u8) -> (result: Fat_Registers) {
-  switch r16_val {
-  case 0:
-    result = .BC
-  case 1:
-    result = .DE
-  case 2:
-    result = .HL
-  case 3:
-    result = .AF
-    print("Questionable if this should happen!\n")
-  case:
-    panic("Illegal r16 value.")
-  }
-  
-  return
-}
-
-@(private)
-fat_register_value :: proc(fat_reg: Fat_Registers) -> u16 {
-  l, r := fat_to_two_registers(fat_reg)
-  left_reg, right_reg := registers[l], registers[r]
-  
-  result := (u16(left_reg) << 8) | u16(right_reg)
-  
-  return result
-}
-
-put_u16_to_fat_register :: proc(fat_reg: Fat_Registers, value: u16) {
-  l, r := fat_to_two_registers(fat_reg)
-  left_reg  := &registers[l]
-  right_reg := &registers[r]
-  
-  left_reg^  = u8((value & 0xFF00) >> 8)
-  right_reg^ = u8(value & 0xFF)
-}
-
-fat_to_two_registers :: proc(fat_reg: Fat_Registers) -> (left, right: Registers) {
-  switch fat_reg {
-  case .AF:
-    left, right = .A, .F
-  case .BC:
-    left, right = .B, .C
-  case .DE:
-    left, right = .D, .E
-  case .HL:
-    left, right = .H, .L
-  }
-  return
-}
-
+r16_mapping :=    [?]Reg_16bit{.BC, .DE, .HL, .SP}
+r16stk_mapping := [?]Reg_16bit{.BC, .DE, .HL, .AF}
 
 r8_to_byte :: proc(r8_val: u8) -> ^u8 {
   result: ^u8
-  r8_to_register_mapping := [?]Registers{.B, .C, .D, .E, .H, .L, .F, .A}
+  r8_to_register_mapping := [?]Reg_8bit{.B, .C, .D, .E, .H, .L, .F, .A}
   
   assert(r8_val < len(r8_to_register_mapping), "Illegal r8 value passed.")
   
   if r8_val != 6 {
-    result = &registers[r8_to_register_mapping[r8_val]]
+    result = &regs_byte[r8_to_register_mapping[r8_val]]
   } else {
     // Maybe shouldn't handle the [hl] case here
-    address := fat_register_value(.HL)
+    address := regs_word[.HL]
     result = &memory_map[address]
   }
   
@@ -298,7 +256,7 @@ r8_to_byte :: proc(r8_val: u8) -> ^u8 {
 }
 
 get_flag :: proc(flag: Flags) -> u8 {
-  flag_byte := registers[.F]
+  flag_byte := regs_byte[.F]
   flag_bit := flag_byte & u8(flag)
   return flag_bit
 }
@@ -312,11 +270,11 @@ do_flag :: proc(flag: Flags, set: bool) {
 }
 
 set_flag :: proc(flag: Flags) {
-  flag_byte := &registers[.F]
+  flag_byte := &regs_byte[.F]
   flag_byte^ |= u8(flag)
 }
 
 clear_flag :: proc(flag: Flags) {
-  flag_byte := &registers[.F]
+  flag_byte := &regs_byte[.F]
   flag_byte^ &= ~u8(flag)
 }

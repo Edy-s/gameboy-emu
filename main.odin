@@ -4,12 +4,22 @@ import "core:os"
 import "core:fmt"
 print :: fmt.printf
 
-Registers :: enum {
-  A, F, B, C, D, E, H, L
+Reg_8bit :: enum {
+  // Order is swapped to match hi- and lo- bit status in the register union.
+  F, A,
+  C, B,
+  E, D,
+  L, H,
 }
-Fat_Registers :: enum {
-  AF, BC, DE, HL
+Reg_16bit :: enum {
+  AF, BC, DE, HL, SP
 }
+
+Registers :: struct #raw_union {
+  byte: [Reg_8bit]u8,
+  word: [Reg_16bit]u16,
+}
+
 Flags :: enum u8 {
   Zero       = 0x1,
   Negative   = 0x2,
@@ -17,9 +27,13 @@ Flags :: enum u8 {
   Carry      = 0x8,
 }
 
-registers : [Registers]u8
-stack_pointer : u16
-instruction_pointer :u16= 0x100
+registers : Registers
+regs_byte := &registers.byte
+regs_word := &registers.word
+
+instruction_pointer : u16 = 0x100
+interrupt_master_flag := 1
+
 
 memory_map : [0xFFFFF]u8
 
@@ -51,16 +65,16 @@ main :: proc() {
     execution_succeded := execute_instruction(instruction)
     
     {
-      A  := registers[.A]
-      B  := registers[.B]
-      C  := registers[.C]
-      D  := registers[.D]
-      E  := registers[.E]
-      H  := registers[.H]
-      L  := registers[.L]
-      BC := fat_register_value(.BC)
-      DE := fat_register_value(.DE)
-      HL := fat_register_value(.HL)
+      A  := &regs_byte[.A]
+      B  := &regs_byte[.B]
+      C  := &regs_byte[.C]
+      D  := &regs_byte[.D]
+      E  := &regs_byte[.E]
+      H  := &regs_byte[.H]
+      L  := &regs_byte[.L]
+      BC := &regs_word[.BC]
+      DE := &regs_word[.DE]
+      HL := &regs_word[.HL]
       x := 1.2 // Debug point
     }
     
