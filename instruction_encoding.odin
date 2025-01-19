@@ -74,9 +74,24 @@ Term :: struct {
 Instruction :: struct {
   op: Operators,
   
-  terms : [Op_Param_Term]Term,
+  dest_term, source_term: Term,
   
   set_params: bit_set[Op_Param_Type],
   params: [Op_Param_Type]u8,
   modifiers: bit_set[Op_Modifiers],
+}
+
+import "core:reflect"
+pretty_print_instruction :: proc(instr: Instruction) {
+  zeroed_instr :: Instruction{}
+  using reflect
+  fields := struct_fields_zipped(type_of(instr))
+  for field in fields {
+    val := struct_field_value(instr, field)
+    nil_val := struct_field_value(zeroed_instr, field)
+    if !equal(val, nil_val, true) {
+      print("%v = %v\n", field.name, val)
+    }
+  }
+  print("\n")
 }
