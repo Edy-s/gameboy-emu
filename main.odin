@@ -10,9 +10,11 @@ Reg_8bit :: enum {
   C, B,
   E, D,
   L, H,
+  SPL, SPH,
+  PCL, PCH,
 }
 Reg_16bit :: enum {
-  AF, BC, DE, HL, SP
+  AF, BC, DE, HL, SP, PC
 }
 
 Registers :: struct #raw_union {

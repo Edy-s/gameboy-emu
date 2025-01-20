@@ -241,6 +241,16 @@ execute_instruction :: proc(source_instruction: Instruction) -> bool {
       }
       instruction.op = Operators(0)
     
+    // case .or:
+    //   assert(source_term.type != .NOT_SET)
+    //   source_value: u8
+    //   if source_term.type == .r8 {
+    //     source_value = r8_to_byte(source_term.value8)^
+    //     source_term^ = {}
+    //   }
+      
+      
+        
     // case .ei:
     //   interrupt_master_flag = 1
     //   instruction.op = Operators(0)
@@ -315,6 +325,7 @@ execute_instruction :: proc(source_instruction: Instruction) -> bool {
     
   return success
 }
+
 
 r16_mapping :=    [?]Reg_16bit{.BC, .DE, .HL, .SP}
 r16stk_mapping := [?]Reg_16bit{.BC, .DE, .HL, .AF}
