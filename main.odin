@@ -54,10 +54,12 @@ main :: proc() {
   assert(len(file[:])-1 == 0x7FFF)
   copy(memory_map[0x0000:0x7FFF], file[:])
   
-  
   running := true
   
   for running {
+    other_inst := decode_next(false)
+    fmt.println(other_inst.opcode_string)
+    
     instruction := decode_next_instruction()
     
     if instruction_pointer > 0xFEA0 {
