@@ -20,7 +20,7 @@ exec_command :: proc(instruction: Instruction) -> bool {
   case .next:
     byte := memory_map[program_counter^]
     program_counter^ += 1
-    put_byte_to_info(byte)
+    add_byte_to_info(byte)
     
     valid = true
     cycles_used += 1
@@ -66,11 +66,11 @@ exec_command :: proc(instruction: Instruction) -> bool {
         valid = true
       }
     
-    case .pc, .r16:
+    case .pc, .r16, .r16stk:
       r16_reg: Reg_16bit
          
-      if action.reg == .r16 {
-        r16_value := get_param(.r16, instruction)
+      if action.reg == .r16 || action.reg == .r16stk {
+        r16_value := get_param(action.reg, instruction)
         r16_reg = r16_mapping[r16_value]
       } else if action.reg == .pc {
         r16_reg = .PC
@@ -117,17 +117,44 @@ exec_command :: proc(instruction: Instruction) -> bool {
   
   case .alu:
     action := command.data.(Alu_Action)
-    if running_opcode_info.bytes_set == 1 {
+    if running_opcode_info.bytes_set == 1 { // Byte
       byte := get_info_byte()
+      rhs: u8
+      if action.rhs != .none { assert(action.rhs == .a); rhs = regs_byte[.A] }
       #partial switch action.function {
+      case .OR:
+        byte ~= rhs
+        
+        clear_flag(.Negative)
+        clear_flag(.Half_Carry)
+        clear_flag(.Carry)
+        
+        valid = true
+      case .XOR:
+        byte ~= rhs
+        
+        clear_flag(.Negative)
+        clear_flag(.Half_Carry)
+        clear_flag(.Carry)
+        
+        valid = true
       case .INC:
         byte += 1
+        
         clear_flag(.Negative)
         
         valid = true
       case .DEC:
         byte -= 1
+        
         set_flag(.Negative)
+        
+        valid = true
+      case .CP:
+        byte -= rhs
+        
+        set_flag(.Negative)
+        
         valid = true
       }
       
@@ -136,7 +163,7 @@ exec_command :: proc(instruction: Instruction) -> bool {
       // do_flag(.Half_Carry, is_overflow)
       
       put_byte_to_info(byte)
-    } else if running_opcode_info.bytes_set == 2 {
+    } else if running_opcode_info.bytes_set == 2 { // Word
       word := get_info_word()
       #partial switch action.function {
       case .SIGNED_ADD:
@@ -157,9 +184,31 @@ exec_command :: proc(instruction: Instruction) -> bool {
         
         put_word_to_info(result)
         cycles_used += 1
+      case .INC:
+        word += 1
+        put_word_to_info(word)
+        
+        cycles_used += 1
+        valid = true
       }
     }
-  
+    
+  case .push:
+    byte := pop_info_byte()
+    regs_word[.SP] -= 1
+    memory_map[regs_word[.SP]] = byte
+    
+    cycles_used += 1
+    valid = true
+
+  case .pop:
+    byte := memory_map[regs_word[.SP]]
+    regs_word[.SP] += 1
+    add_byte_to_info(byte)
+    
+    cycles_used += 1
+    valid = true
+    
   case .clear_i:
     // todo: flip this flag on next cycle
     interrupt_master_flag = 0
@@ -169,6 +218,12 @@ exec_command :: proc(instruction: Instruction) -> bool {
     cycles_used += 1
     valid = true
   
+  case .set_msb:
+    assert(running_opcode_info.bytes_set == 1)
+    running_opcode_info.data.bytes.msb = 0xFF
+    running_opcode_info.bytes_set += 1
+    valid = true
+  
   case .stash:
     running_opcode_info.stash_set = running_opcode_info.bytes_set
     running_opcode_info.stash     = running_opcode_info.data.word
@@ -176,6 +231,12 @@ exec_command :: proc(instruction: Instruction) -> bool {
     running_opcode_info.data.word = 0
     valid = true
     
+  case .unstash:
+    running_opcode_info.bytes_set = running_opcode_info.stash_set
+    running_opcode_info.data.word = running_opcode_info.stash
+    running_opcode_info.stash_set = 0
+    running_opcode_info.stash     = 0
+    valid = true
   case:
   }
   
@@ -199,10 +260,16 @@ get_stash_byte :: proc() -> u8 {
   return u8(running_opcode_info.stash)
 }
 
-put_byte_to_info :: proc(byte: u8) {
+add_byte_to_info :: proc(byte: u8) {
   if      running_opcode_info.bytes_set == 0 { running_opcode_info.data.bytes.lsb = byte }
   else if running_opcode_info.bytes_set == 1 { running_opcode_info.data.bytes.msb = byte }
   else { panic("Unreachable.") }
+  running_opcode_info.bytes_set += 1
+}
+
+put_byte_to_info :: proc(byte: u8) {
+  assert(running_opcode_info.bytes_set == 0)
+  running_opcode_info.data.bytes.lsb = byte
   running_opcode_info.bytes_set += 1
 }
 
@@ -218,6 +285,13 @@ get_info_byte :: proc() -> u8 {
   return running_opcode_info.data.bytes.lsb
 }
 
+pop_info_byte :: proc() -> u8 {
+  assert(running_opcode_info.bytes_set > 0)
+  if running_opcode_info.bytes_set == 2 { return running_opcode_info.data.bytes.msb }
+  if running_opcode_info.bytes_set == 1 { return running_opcode_info.data.bytes.lsb }
+  panic("Unreachable")
+}
+
 get_info_word :: proc() -> u16 {
   assert(running_opcode_info.bytes_set == 2)
   running_opcode_info.bytes_set -= 2
@@ -225,16 +299,12 @@ get_info_word :: proc() -> u16 {
 }
 
 get_param :: proc(type: Op_Param_Type, instr: Instruction) -> u8 {
-  result: u8
-  found := false
   for param in instr.params {
     if param.type == type {
-      found = true
-      result = param.value
+      return param.value
     }
   }
-  if !found { panic("Unreachable.") }
-  return result
+  panic("Unreachable.")
 }
 
 
@@ -259,6 +329,7 @@ r16stk_mapping := [?]Reg_16bit{.BC, .DE, .HL, .AF}
 
 get_flag :: proc(flag: Flags) -> u8 {
   assert(flag != .Half_Carry, "use of this requires real bitwise implementation of math")
+  assert(flag != .Negative,   "use of this requires real bitwise implementation of math")
   flag_byte := regs_byte[.F]
   flag_bit := flag_byte & u8(flag)
   return flag_bit

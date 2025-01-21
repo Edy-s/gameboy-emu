@@ -189,8 +189,8 @@ opcode_table_v2 := [?]Op_Encoding_V2{
   {"jp word %v",     B("11000011"), {next, next, store_reg(.pc), clock}}, // 4cc
   {"jp hl",          B("11101001"), {load_reg(.hl), store_reg(.pc)}}, // 1cc
   
-  {"call %v, word %v", B("110c_100"), {next, next, stash, check_condition, load_reg(.pc), push, push, unstash, store_reg(.pc)}}, // 3-6cc
-  {"call word %v",     B("11001101"), {next, next, stash,                  load_reg(.pc), push, push, unstash, store_reg(.pc)}}, // 6cc
+  {"call %v, word $%v", B("110c_100"), {next, next, stash, check_condition, load_reg(.pc), push, push, unstash, store_reg(.pc)}}, // 3-6cc
+  {"call word $%v",     B("11001101"), {next, next, stash,                  load_reg(.pc), push, push, unstash, store_reg(.pc)}}, // 6cc
   
   {"rst %2x", B("11t__111"), {rst}}, // 4cc
   

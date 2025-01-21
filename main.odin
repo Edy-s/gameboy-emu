@@ -102,9 +102,10 @@ main :: proc() {
       BC := regs_word[.BC]
       DE := regs_word[.DE]
       HL := regs_word[.HL]
+      SP := regs_word[.SP]
       X := 1
       if false {
-        print("", A, B, C, D, E, H, L, BC, DE, HL, X)
+        print("", A, B, C, D, E, H, L, BC, DE, HL, SP, X)
       }
     }
   }
