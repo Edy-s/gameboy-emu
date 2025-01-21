@@ -60,14 +60,14 @@ main :: proc() {
     other_inst := decode_next(false)
     fmt.println(other_inst.opcode_string)
     
-    instruction := decode_next_instruction()
+    // instruction := decode_next_instruction()
     
     if instruction_pointer > 0xFEA0 {
       print("End of the line.\n")
       running = false
     }
     
-    execution_succeded := execute_instruction(instruction)
+    // execution_succeded := execute_instruction(instruction)
     
     {
       A  := regs_byte[.A]
@@ -85,12 +85,12 @@ main :: proc() {
       }
     }
     
-    if execution_succeded {
-      number_of_instructions_executed_succesfully += 1
-    } else {
-      if print_instruction_on_fail_only do pretty_print_instruction(instruction)
-      running = false
-    }
+    // if execution_succeded {
+    //   number_of_instructions_executed_succesfully += 1
+    // } else {
+    //   if print_instruction_on_fail_only do pretty_print_instruction(instruction)
+    //   running = false
+    // }
   }
   print("Number of instructions executed: %v\n", number_of_instructions_executed_succesfully)
 }
