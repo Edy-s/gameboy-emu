@@ -9,15 +9,8 @@ Op_Encoding_V2 :: struct {
   commands: []Command,
 }
 
-@(private)
-Op_Param_Type2 :: enum u8 {
-  none, r8 = 'r', r16 = 'w', r16stk = 'k', r16mem = 'm', cond = 'c', bi3 = 'i', tgt3 = 't', d8 = 'd', s8 = 's',
-  
-  a, sp, spl, sph, hl, stash, pc, imm8, c
-}
-
 Op_Param :: struct {
-  type: Op_Param_Type2,
+  type: Op_Param_Type,
   mask, r_offset: u8,
 }
 
@@ -55,7 +48,7 @@ B :: proc(bit_pattern: string) -> (result: Opcode) {
     case 'r', 'w', 'k', 'm', 'c', 'i', 't', 'd', 's':
       params_found += 1
       edit_param = &result.params[params_found]
-      edit_param.type = Op_Param_Type2(char)
+      edit_param.type = Op_Param_Type(char)
       edit_param.mask     |= 1
       
     case '_':
@@ -68,30 +61,6 @@ B :: proc(bit_pattern: string) -> (result: Opcode) {
   return
 }
 
-Command_Type :: enum {
-  illegal,
-  
-  next,
-  load, store,
-  write, read,
-  push, pop,
-  alu,
-  check_condition,
-  stash, unstash, inc_stash,
-  halt, stop,
-  set_i, clear_i,
-  rst,
-  
-  set_msb,
-  clock, prefix,
-}
-
-@(private)
-Command :: struct {
-  type: Command_Type,
-  data: union { Register_Action, Memory_Action, Alu_Action }
-}
-  
 next      :: Command{type = .next}
 stash     :: Command{type = .stash}
 unstash   :: Command{type = .unstash}
@@ -110,45 +79,30 @@ prefix  :: Command{type = .prefix}
 set_msb :: Command{type = .set_msb}
 // illegal :: Command{type = .illegal}
 
-Register_Action :: struct { reg: Op_Param_Type2 }
-store_reg :: proc(param: Op_Param_Type2) -> (cmd: Command) {
+store_reg :: proc(param: Op_Param_Type) -> (cmd: Command) {
   cmd.type = .store
   cmd.data = Register_Action{param}
   return
 }
-load_reg :: proc(param: Op_Param_Type2) -> (cmd: Command) {
+load_reg :: proc(param: Op_Param_Type) -> (cmd: Command) {
   cmd.type = .load
   cmd.data = Register_Action{param}
   return
 }
-Memory_Action :: struct { address: Op_Param_Type2 }
-write_mem :: proc(address: Op_Param_Type2) -> (cmd: Command) {
+write_mem :: proc(address: Op_Param_Type) -> (cmd: Command) {
   cmd.type = .write
   cmd.data = Memory_Action{address}
   return
 }
-read_mem :: proc(address: Op_Param_Type2) -> (cmd: Command) {
+read_mem :: proc(address: Op_Param_Type) -> (cmd: Command) {
   cmd.type = .write
   cmd.data = Memory_Action{address}
   return
 }
-Alu_Action :: struct { function: Alu_Function, rhs: Op_Param_Type2 }
-alu :: proc(function: Alu_Function, rhs: Op_Param_Type2 = .none) -> (cmd: Command) {
+alu :: proc(function: Alu_Function, rhs: Op_Param_Type = .none) -> (cmd: Command) {
   cmd.type = .alu
   cmd.data = Alu_Action{function, rhs}
   return
-}
-
-Alu_Function :: enum {
-  INC, DEC, ADD, ADC, SUB, SBC,
-  AND, XOR, OR, CP,
-  RLC, RRC, RL, RR,
-  DAA, CPL, SCF, CCF,
-  SIGNED_ADD,
-  SLA, SRA,
-  SRL,
-  SWAP,
-  BIT, RES, SET,
 }
 
 @(private)

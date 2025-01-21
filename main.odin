@@ -33,7 +33,8 @@ registers : Registers
 regs_byte := &registers.byte
 regs_word := &registers.word
 
-instruction_pointer : u16 = 0x100
+// instruction_pointer : u16 = 0x100
+program_counter := &regs_word[.PC]
 interrupt_master_flag := 1
 
 
@@ -55,19 +56,39 @@ main :: proc() {
   copy(memory_map[0x0000:0x7FFF], file[:])
   
   running := true
+  program_counter^ = 0x0100
   
   for running {
-    other_inst := decode_next(false)
-    fmt.println(other_inst.opcode_string)
+    instruction := decode_next(false)
+    print("%v, 0x: %x\n", instruction.opcode_string, instruction.reference_byte)
     
-    // instruction := decode_next_instruction()
+    anti_spinlock := 0
+    valid := true
+    for command_index < len(command_buffer) {
+      valid = exec_command()
+      
+      anti_spinlock += 1
+      if anti_spinlock > 100 {
+        panic("Spinlock!")
+      }
+      if !valid { break }
+    }
     
-    if instruction_pointer > 0xFEA0 {
+    clear(&command_buffer)
+    running_opcode_info = {}
+    
+    if valid {
+      number_of_instructions_executed_succesfully += 1
+    } else {
+      print("Number of instructions executed: %v\n", number_of_instructions_executed_succesfully)
+      running = false
+    }
+    
+    if program_counter^ > 0xFEA0 {
       print("End of the line.\n")
       running = false
     }
     
-    // execution_succeded := execute_instruction(instruction)
     
     {
       A  := regs_byte[.A]
@@ -84,13 +105,5 @@ main :: proc() {
         print("", A, B, C, D, E, H, L, BC, DE, HL)
       }
     }
-    
-    // if execution_succeded {
-    //   number_of_instructions_executed_succesfully += 1
-    // } else {
-    //   if print_instruction_on_fail_only do pretty_print_instruction(instruction)
-    //   running = false
-    // }
   }
-  print("Number of instructions executed: %v\n", number_of_instructions_executed_succesfully)
 }
