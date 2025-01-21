@@ -95,7 +95,7 @@ write_mem :: proc(address: Op_Param_Type) -> (cmd: Command) {
   return
 }
 read_mem :: proc(address: Op_Param_Type) -> (cmd: Command) {
-  cmd.type = .write
+  cmd.type = .read
   cmd.data = Memory_Action{address}
   return
 }
@@ -143,7 +143,7 @@ opcode_table_v2 := [?]Op_Encoding_V2{
   // The order of these following two instructions is important!
   {"halt", B("01110110"), {halt}}, // ?cc
   
-  {"ld %v, %v", B("01d__s__"), {load_reg(.d8), store_reg(.s8)}}, // 1cc
+  {"ld %v, %v", B("01d__s__"), {load_reg(.s8), store_reg(.d8)}}, // 1cc
   
   // Block 2
   {"add a, %v", B("10000r__"), {load_reg(.r8), alu(.ADD, .a), store_reg(.a)}}, // 1-2cc

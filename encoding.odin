@@ -1,9 +1,9 @@
 package main
 
-Op_Param_Type :: enum u8 {
+Op_Param_Type :: enum u16 {
   none, r8 = 'r', r16 = 'w', r16stk = 'k', r16mem = 'm', cond = 'c', bi3 = 'i', tgt3 = 't', d8 = 'd', s8 = 's',
   
-  a, sp, spl, sph, hl, stash, pc, imm8, c
+  a = 255, sp, spl, sph, hl, stash, pc, imm8, c
 }
 
 Command_Type :: enum {
@@ -30,8 +30,9 @@ Command :: struct {
 }
 
 Register_Action :: struct { reg: Op_Param_Type }
-Memory_Action :: struct { address: Op_Param_Type }
-Alu_Action :: struct { function: Alu_Function, rhs: Op_Param_Type }
+Memory_Action   :: struct { address: Op_Param_Type }
+Alu_Action      :: struct { function: Alu_Function, rhs: Op_Param_Type }
+
 Alu_Function :: enum {
   INC, DEC, ADD, ADC, SUB, SBC,
   AND, XOR, OR, CP,

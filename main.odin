@@ -65,7 +65,7 @@ main :: proc() {
     anti_spinlock := 0
     valid := true
     for command_index < len(command_buffer) {
-      valid = exec_command()
+      valid = exec_command(instruction)
       
       anti_spinlock += 1
       if anti_spinlock > 100 {

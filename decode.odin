@@ -5,7 +5,7 @@ nopsed := 0
 command_buffer : [dynamic]Command
 command_index  : int
 
-Instruction_v2 :: struct {
+Instruction :: struct {
   opcode_string: string,
   reference_byte: u8,
   params: [2]struct {
@@ -14,7 +14,7 @@ Instruction_v2 :: struct {
   }
 }
 
-decode_next :: proc(prefixed: bool) -> (result: Instruction_v2) {
+decode_next :: proc(prefixed: bool) -> (result: Instruction) {
   assert(len(command_buffer) == 0)
   
   instruction_byte := memory_map[regs_word[.PC]]
