@@ -37,15 +37,19 @@ B :: proc(bit_pattern: string) -> (result: Opcode) {
     case '1':
       result.value |= 1
       result.mask  |= 1
-      edit_param.r_offset = u8(i)
+      
+      edit_param.r_offset = 8 - u8(i)
       edit_param = &nil_param
       
     case '0':
       result.mask  |= 1
-      edit_param.r_offset = u8(i)
+      
+      edit_param.r_offset = 8 - u8(i)
       edit_param = &nil_param
       
     case 'r', 'w', 'k', 'm', 'c', 'i', 't', 'd', 's':
+      edit_param.r_offset = 8 - u8(i)
+      
       params_found += 1
       edit_param = &result.params[params_found]
       edit_param.type = Op_Param_Type(char)
@@ -99,9 +103,9 @@ read_mem :: proc(address: Op_Param_Type) -> (cmd: Command) {
   cmd.data = Memory_Action{address}
   return
 }
-alu :: proc(function: Alu_Function, rhs: Op_Param_Type = .none) -> (cmd: Command) {
+alu :: proc(function: Alu_Function, rhs: Op_Param_Type = .none, set_flags := true) -> (cmd: Command) {
   cmd.type = .alu
-  cmd.data = Alu_Action{function, rhs}
+  cmd.data = Alu_Action{function, rhs, set_flags}
   return
 }
 
@@ -110,10 +114,10 @@ opcode_table_v2 := [?]Op_Encoding_V2{
   // Block 0
   {"nop", B("00000000"), {}}, // 1cc
   
-  {"ld %v, word %v", B("00w_0001"), {next, next, store_reg(.r16)}}, // 3cc
-  {"ld [%v], a",     B("00m_0010"), {load_reg(.a), write_mem(.r16mem)}}, // 2cc
-  {"ld a, [%v]",     B("00m_1010"), {read_mem(.r16mem), store_reg(.a)}}, // 2cc
-  {"ld [%v], sp",    B("00001000"), {next, next, stash, load_reg(.spl), write_mem(.stash), inc_stash, load_reg(.sph), write_mem(.stash)}}, // 5cc
+  {"ld %v, word %v",   B("00w_0001"), {next, next, store_reg(.r16)}}, // 3cc
+  {"ld [%v], a",       B("00m_0010"), {load_reg(.a), write_mem(.r16mem)}}, // 2cc
+  {"ld a, [%v]",       B("00m_1010"), {read_mem(.r16mem), store_reg(.a)}}, // 2cc
+  {"ld [word %v], sp", B("00001000"), {next, next, stash, load_reg(.spl), write_mem(.stash), inc_stash, load_reg(.sph), write_mem(.stash)}}, // 5cc
   
   {"inc %v",     B("00w_0011"), {load_reg(.r16), alu(.INC), store_reg(.r16)}}, // 2cc
   {"dec %v",     B("00w_1011"), {load_reg(.r16), alu(.DEC), store_reg(.r16)}}, // 2cc
@@ -134,8 +138,8 @@ opcode_table_v2 := [?]Op_Encoding_V2{
   {"scf", B("00110111"), {alu(.SCF)}}, // 1cc
   {"ccf", B("00111111"), {alu(.CCF)}}, // 1cc
   
-  {"jr %i",      B("00011000"), {next, load_reg(.pc), alu(.SIGNED_ADD, .imm8), store_reg(.pc)}}, // 3cc // todo: check if this actually prints signed value 
-  {"jr %v, $%i", B("001c_000"), {next, check_condition, load_reg(.pc), alu(.SIGNED_ADD, .imm8), store_reg(.pc)}}, // 2-3cc
+  {"jr %i",      B("00011000"), {next, stash,                  load_reg(.pc), alu(.SIGNED_ADD, .stash, set_flags = false), store_reg(.pc)}}, // 3cc // todo: check if this actually prints signed value 
+  {"jr %v, $%i", B("001c_000"), {next, stash, check_condition, load_reg(.pc), alu(.SIGNED_ADD, .stash, set_flags = false), store_reg(.pc)}}, // 2-3cc
   
   {"stop", B("00010000"), {stop}},
   
@@ -203,8 +207,8 @@ opcode_table_v2 := [?]Op_Encoding_V2{
   {"ld a, [word %v]",  B("11111010"), {next,         next,    stash, read_mem(.stash), store_reg(.a)}}, // 4cc
   
   
-  {"add sp, imm8",         B("11101000"), {next, alu(.ADD, .sp), clock, store_reg(.sp)}}, // 4cc
-  {"ld hl, sp + byte %v",  B("11111000"), {next, alu(.ADD, .sp), store_reg(.hl)}}, // 3cc
+  {"add sp, byte %v",      B("11101000"), {next, alu(.SIGNED_ADD, .sp), clock, store_reg(.sp)}}, // 4cc
+  {"ld hl, sp + byte %v",  B("11111000"), {next, alu(.SIGNED_ADD, .sp), store_reg(.hl)}}, // 3cc
   {"ld sp, hl",            B("11111001"), {load_reg(.hl), store_reg(.sp), clock}}, // 2cc
 
   {"di", B("11110011"), {clear_i}}, // 1cc

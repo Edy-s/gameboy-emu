@@ -23,10 +23,10 @@ Registers :: struct #raw_union {
 }
 
 Flags :: enum u8 {
-  Zero       = 0x1,
-  Negative   = 0x2,
-  Half_Carry = 0x4,
-  Carry      = 0x8,
+  Zero       = 0x80,
+  Negative   = 0x40,
+  Half_Carry = 0x20,
+  Carry      = 0x10,
 }
 
 registers : Registers
@@ -59,8 +59,9 @@ main :: proc() {
   program_counter^ = 0x0100
   
   for running {
+    decoded_at := program_counter^
     instruction := decode_next(false)
-    print("%v, 0x: %x\n", instruction.opcode_string, instruction.reference_byte)
+    print("%-16v - 0x %2x; at %v\n", instruction.opcode_string, instruction.reference_byte, decoded_at)
     
     anti_spinlock := 0
     valid := true
@@ -101,8 +102,9 @@ main :: proc() {
       BC := regs_word[.BC]
       DE := regs_word[.DE]
       HL := regs_word[.HL]
+      X := 1
       if false {
-        print("", A, B, C, D, E, H, L, BC, DE, HL)
+        print("", A, B, C, D, E, H, L, BC, DE, HL, X)
       }
     }
   }

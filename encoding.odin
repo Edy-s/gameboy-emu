@@ -31,7 +31,7 @@ Command :: struct {
 
 Register_Action :: struct { reg: Op_Param_Type }
 Memory_Action   :: struct { address: Op_Param_Type }
-Alu_Action      :: struct { function: Alu_Function, rhs: Op_Param_Type }
+Alu_Action      :: struct { function: Alu_Function, rhs: Op_Param_Type, set_flags: bool }
 
 Alu_Function :: enum {
   INC, DEC, ADD, ADC, SUB, SBC,

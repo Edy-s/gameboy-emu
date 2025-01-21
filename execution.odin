@@ -25,6 +25,21 @@ exec_command :: proc(instruction: Instruction) -> bool {
     valid = true
     cycles_used += 1
   
+  case .check_condition:
+    cond := get_param(.cond, instruction)
+    
+    pass: bool
+    switch cond {
+    case 0: pass = get_flag(.Zero)  == 0
+    case 1: pass = get_flag(.Zero)  != 0
+    case 2: pass = get_flag(.Carry) == 0
+    case 3: pass = get_flag(.Carry) != 0
+    case: panic("Unreachable")
+    }
+    if !pass { clear(&command_buffer) }
+    
+    valid = true
+    
   case .load, .store:
     action := command.data.(Register_Action)
     
@@ -61,7 +76,11 @@ exec_command :: proc(instruction: Instruction) -> bool {
         r16_reg = .PC
       }
       
-      if command.type == .load {}
+      if command.type == .load {
+        put_word_to_info(regs_word[r16_reg])
+
+        valid = true
+      }
       if command.type == .store {
         regs_word[r16_reg] = get_info_word()
         
@@ -71,47 +90,21 @@ exec_command :: proc(instruction: Instruction) -> bool {
     case:
     }
   
-  // case .store:
-  //   action := command.data.(Register_Action)
-  //   #partial switch action.reg {
-  //   case .pc, .r16:
-  //     register: Reg_16bit
-      
-  //     if action.reg == .r16 {
-  //       r16_value := get_param(.r16, instruction)
-  //       register = r16_mapping[r16_value]
-  //       valid = true
-  //     } else if action.reg == .pc {
-  //       register = .PC
-  //       valid = true
-  //     }
-      
-  //     regs_word[register] = get_info_word()
-      
-  //   case .d8, .r8:
-  //     r8_value := get_param(action.reg, instruction)
-      
-  //     r8_reg, do_mem_hl := r8_mapping(r8_value)
-  //     if !do_mem_hl {
-  //       regs_byte[r8_reg] = get_info_byte()
-  //       valid = true
-  //     } else {
-  //     }
-    
-  //   case .a:
-  //     regs_byte[.A] = get_info_byte()
-  //     valid = true
-      
-  //   case:
-  //   }
-  
   case .read, .write:
     action := command.data.(Memory_Action)
     #partial switch action.address {
-    case .r16mem:
-      r16mem_value := get_param(action.address, instruction)
-      register, change := r16mem_mapping(r16mem_value)
-      address := regs_word[register]
+    case .r16mem, .stash:
+      register: Reg_16bit
+      change: u16
+      address: u16
+      
+      if action.address == .r16mem {
+        r16mem_value := get_param(action.address, instruction)
+        register, change = r16mem_mapping(r16mem_value)
+        address = regs_word[register]
+      } else if action.address == .stash {
+        address = get_stash_word()
+      }
       
       if      command.type == .read  { put_byte_to_info(memory_map[address]) }
       else if command.type == .write { memory_map[address] = get_info_byte() }
@@ -122,21 +115,88 @@ exec_command :: proc(instruction: Instruction) -> bool {
       valid = true
     }
   
+  case .alu:
+    action := command.data.(Alu_Action)
+    if running_opcode_info.bytes_set == 1 {
+      byte := get_info_byte()
+      #partial switch action.function {
+      case .INC:
+        byte += 1
+        clear_flag(.Negative)
+        
+        valid = true
+      case .DEC:
+        byte -= 1
+        set_flag(.Negative)
+        valid = true
+      }
+      
+      do_flag(.Zero, byte == 0)
+      // is_overflow := ((byte & 0xF) == 0)
+      // do_flag(.Half_Carry, is_overflow)
+      
+      put_byte_to_info(byte)
+    } else if running_opcode_info.bytes_set == 2 {
+      word := get_info_word()
+      #partial switch action.function {
+      case .SIGNED_ADD:
+        rhs: u16
+        rhs_reg := action.rhs
+        if rhs_reg == .stash {
+          rhs = u16(i16(i8(get_stash_byte())))
+          valid = true
+        }
+        
+        result := word + rhs
+        if action.set_flags {
+          clear_flag(.Zero)
+          clear_flag(.Negative)
+          // do_flag(.Half_Carry)
+          // do_flag(.Carry)
+        }
+        
+        put_word_to_info(result)
+        cycles_used += 1
+      }
+    }
+  
+  case .clear_i:
+    // todo: flip this flag on next cycle
+    interrupt_master_flag = 0
+    valid = true
+  
   case .clock:
     cycles_used += 1
+    valid = true
+  
+  case .stash:
+    running_opcode_info.stash_set = running_opcode_info.bytes_set
+    running_opcode_info.stash     = running_opcode_info.data.word
+    running_opcode_info.bytes_set = 0
+    running_opcode_info.data.word = 0
     valid = true
     
   case:
   }
   
   if !valid {
-    print("Unimplemented command!\n%v\ninstruction params: %v\n", command_buffer[command_index], instruction.params)
+    print("Unimplemented command!\n%v\ninstruction params: %v\ninfo: %v; data %4x\n", command_buffer[command_index], instruction.params, running_opcode_info, running_opcode_info.data.word)
   }
   
   assert(cycles_used < 2)
   command_index += 1
   
   return valid
+}
+
+get_stash_word :: proc() -> u16 {
+  assert(running_opcode_info.stash_set == 2)
+  return running_opcode_info.stash
+}
+
+get_stash_byte :: proc() -> u8 {
+  assert(running_opcode_info.stash_set == 1)
+  return u8(running_opcode_info.stash)
 }
 
 put_byte_to_info :: proc(byte: u8) {
@@ -146,13 +206,21 @@ put_byte_to_info :: proc(byte: u8) {
   running_opcode_info.bytes_set += 1
 }
 
+put_word_to_info :: proc(word: u16) {
+  assert(running_opcode_info.bytes_set == 0)
+  running_opcode_info.data.word = word
+  running_opcode_info.bytes_set += 2
+}
+
 get_info_byte :: proc() -> u8 {
   assert(running_opcode_info.bytes_set == 1)
+  running_opcode_info.bytes_set -= 1
   return running_opcode_info.data.bytes.lsb
 }
 
 get_info_word :: proc() -> u16 {
   assert(running_opcode_info.bytes_set == 2)
+  running_opcode_info.bytes_set -= 2
   return running_opcode_info.data.word
 }
 
@@ -187,3 +255,29 @@ r16mem_mapping :: proc(r16mem_value: u8) -> (reg: Reg_16bit, change: u16) {
 
 r16_mapping    := [?]Reg_16bit{.BC, .DE, .HL, .SP}
 r16stk_mapping := [?]Reg_16bit{.BC, .DE, .HL, .AF}
+
+
+get_flag :: proc(flag: Flags) -> u8 {
+  assert(flag != .Half_Carry, "use of this requires real bitwise implementation of math")
+  flag_byte := regs_byte[.F]
+  flag_bit := flag_byte & u8(flag)
+  return flag_bit
+}
+
+do_flag :: proc(flag: Flags, set: bool) {
+  if set {
+    set_flag(flag)
+  } else {
+    clear_flag(flag)
+  }
+}
+
+set_flag :: proc(flag: Flags) {
+  flag_byte := &regs_byte[.F]
+  flag_byte^ |= u8(flag)
+}
+
+clear_flag :: proc(flag: Flags) {
+  flag_byte := &regs_byte[.F]
+  flag_byte^ &= ~u8(flag)
+}
