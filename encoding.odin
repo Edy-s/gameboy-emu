@@ -31,7 +31,7 @@ Command :: struct {
 
 Instruction :: struct {
   opcode_string: string,
-  reference_byte: u8,
+  reference_byte: u8 `fmt:"x"`,
   params: [2]struct {
     type: Op_Param_Type,
     value: u8,

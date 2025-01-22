@@ -1,20 +1,7 @@
 package main
 
-running_opcode_info : struct {
-  bytes_set: u8,
-  data: struct #raw_union {
-    bytes: struct { lsb, msb: u8 },
-    word: u16,
-  },
-  stash: u16,
-  stash_set: u8,
-}
-
-
-exec_command :: proc(instruction: Instruction) -> (int, bool) {
+exec_command :: proc(instruction: Instruction) -> (cycles_used: int, valid: bool, conditioned: bool) {
   command := command_buffer[command_index]
-  cycles_used := 0
-  valid := false
   
   #partial switch command.type {
   case .next:
@@ -36,7 +23,7 @@ exec_command :: proc(instruction: Instruction) -> (int, bool) {
     case 3: pass =  get_flag(.Carry)
     case: panic("Unreachable")
     }
-    if !pass { clear(&command_buffer) }
+    if !pass { conditioned = true }
     
     valid = true
     
@@ -165,84 +152,82 @@ exec_command :: proc(instruction: Instruction) -> (int, bool) {
     valid = true
   
   case .set_msb:
-    assert(running_opcode_info.bytes_set == 1)
-    running_opcode_info.data.bytes.msb = 0xFF
-    running_opcode_info.bytes_set += 1
+    assert(cpu_state.instr_info.bytes_set == 1)
+    cpu_state.instr_info.data.bytes.msb = 0xFF
+    cpu_state.instr_info.bytes_set += 1
     valid = true
   
   case .stash:
-    running_opcode_info.stash_set = running_opcode_info.bytes_set
-    running_opcode_info.stash     = running_opcode_info.data.word
-    running_opcode_info.bytes_set = 0
-    running_opcode_info.data.word = 0
+    cpu_state.instr_info.stash_set = cpu_state.instr_info.bytes_set
+    cpu_state.instr_info.stash     = cpu_state.instr_info.data.word
+    cpu_state.instr_info.bytes_set = 0
+    cpu_state.instr_info.data.word = 0
     valid = true
   case .unstash:
-    running_opcode_info.bytes_set = running_opcode_info.stash_set
-    running_opcode_info.data.word = running_opcode_info.stash
-    running_opcode_info.stash_set = 0
-    running_opcode_info.stash     = 0
+    cpu_state.instr_info.bytes_set = cpu_state.instr_info.stash_set
+    cpu_state.instr_info.data.word = cpu_state.instr_info.stash
+    cpu_state.instr_info.stash_set = 0
+    cpu_state.instr_info.stash     = 0
     valid = true
   case .inc_stash:
-    running_opcode_info.stash += 1
+    cpu_state.instr_info.stash += 1
     valid = true
   }
   
   if !valid {
-    print("Unimplemented command!\n%v\ninstruction params: %v\ninfo: %v; data %4x\n", command_buffer[command_index], instruction.params, running_opcode_info, running_opcode_info.data.word)
+    print("Unimplemented command!\n%v\ninstruction params: %v\ninfo: %v; data %4x\n", command_buffer[command_index], instruction.params, cpu_state.instr_info, cpu_state.instr_info.data.word)
   }
   
   assert(cycles_used < 2)
-  command_index += 1
-  
-  return cycles_used, valid
+  return cycles_used, valid, conditioned
 }
 
 get_stash_word :: proc() -> u16 {
-  assert(running_opcode_info.stash_set == 2)
-  return running_opcode_info.stash
+  assert(cpu_state.instr_info.stash_set == 2)
+  return cpu_state.instr_info.stash
 }
 
 get_stash_byte :: proc() -> u8 {
-  assert(running_opcode_info.stash_set == 1)
-  return u8(running_opcode_info.stash)
+  assert(cpu_state.instr_info.stash_set == 1)
+  return u8(cpu_state.instr_info.stash)
 }
 
 add_byte_to_info :: proc(byte: u8) {
-  if      running_opcode_info.bytes_set == 0 { running_opcode_info.data.bytes.lsb = byte }
-  else if running_opcode_info.bytes_set == 1 { running_opcode_info.data.bytes.msb = byte }
+  if      cpu_state.instr_info.bytes_set == 0 { cpu_state.instr_info.data.bytes.lsb = byte }
+  else if cpu_state.instr_info.bytes_set == 1 { cpu_state.instr_info.data.bytes.msb = byte }
   else { panic("Unreachable.") }
-  running_opcode_info.bytes_set += 1
+  cpu_state.instr_info.bytes_set += 1
 }
 
 put_byte_to_info :: proc(byte: u8) {
-  assert(running_opcode_info.bytes_set == 0)
-  running_opcode_info.data.bytes.lsb = byte
-  running_opcode_info.bytes_set += 1
+  assert(cpu_state.instr_info.bytes_set == 0)
+  cpu_state.instr_info.data.bytes.lsb = byte
+  cpu_state.instr_info.bytes_set += 1
 }
 
 put_word_to_info :: proc(word: u16) {
-  assert(running_opcode_info.bytes_set == 0)
-  running_opcode_info.data.word = word
-  running_opcode_info.bytes_set += 2
+  assert(cpu_state.instr_info.bytes_set == 0)
+  cpu_state.instr_info.data.word = word
+  cpu_state.instr_info.bytes_set += 2
 }
 
 get_info_byte :: proc() -> u8 {
-  assert(running_opcode_info.bytes_set == 1)
-  running_opcode_info.bytes_set -= 1
-  return running_opcode_info.data.bytes.lsb
+  assert(cpu_state.instr_info.bytes_set == 1)
+  cpu_state.instr_info.bytes_set -= 1
+  return cpu_state.instr_info.data.bytes.lsb
 }
 
 pop_info_byte :: proc() -> u8 {
-  assert(running_opcode_info.bytes_set > 0)
-  if running_opcode_info.bytes_set == 2 { running_opcode_info.bytes_set -= 1; return running_opcode_info.data.bytes.msb }
-  if running_opcode_info.bytes_set == 1 { running_opcode_info.bytes_set -= 1; return running_opcode_info.data.bytes.lsb }
+  assert(cpu_state.instr_info.bytes_set > 0)
+  if cpu_state.instr_info.bytes_set == 2 { cpu_state.instr_info.bytes_set -= 1; return cpu_state.instr_info.data.bytes.msb }
+  if cpu_state.instr_info.bytes_set == 1 { cpu_state.instr_info.bytes_set -= 1; return cpu_state.instr_info.data.bytes.lsb }
   panic("Unreachable")
 }
 
 get_info_word :: proc() -> u16 {
-  assert(running_opcode_info.bytes_set == 2)
-  running_opcode_info.bytes_set -= 2
-  return running_opcode_info.data.word
+  assert(cpu_state.instr_info.bytes_set == 2)
+  cpu_state.instr_info.bytes_set -= 2
+  return cpu_state.instr_info.data.word
 }
 
 get_param :: proc(type: Op_Param_Type, instr: Instruction) -> u8 {

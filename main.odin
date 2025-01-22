@@ -87,36 +87,11 @@ main :: proc() {
       print_for_doc(&gb_doc_log)
     }
     
-    instruction_cycles := 1
-    instruction := decode_next(false)
-    if len(command_buffer) > 0 && command_buffer[0].type == .prefix {
-      clear(&command_buffer)
-      instruction = decode_next(true)
-      instruction_cycles += 1
-    }
     // print("%-16v - 0x %2x; at %v\n", instruction.opcode_string, instruction.reference_byte, decoded_at)
     
-    valid := true
-    for command_index < len(command_buffer) {
-      command_cycles := 0
-      command_cycles, valid = exec_command(instruction)
-      instruction_cycles += command_cycles
-      
-      if !valid { break }
-    }
+    cpu_success := do_CPU_tick()
     
-    if !((instruction_cycles == instruction.timing.min) || (instruction_cycles == instruction.timing.max)) {
-      print("\n\nBad timing!\ncycles taken: %v\ninfo: %v\n", instruction_cycles, instruction)
-      running = false
-    }
-      
-    
-    clear(&command_buffer)
-    running_opcode_info = {}
-    
-    if valid {
-      number_of_instructions_executed_succesfully += 1
-    } else {
+    if !cpu_success {
       running = false
     }
     

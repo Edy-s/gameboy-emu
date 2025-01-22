@@ -4,7 +4,7 @@ do_alu :: proc(command: Command, instruction: Instruction) -> (bool, int) {
   valid       := false
   cycles_used := 0
   action := command.data.(Alu_Action)
-  if running_opcode_info.bytes_set == 0 { // Non data functions
+  if cpu_state.instr_info.bytes_set == 0 { // Non data functions
     #partial switch action.function {
       case .SCF:
         clear_flag(.Negative)
@@ -20,7 +20,7 @@ do_alu :: proc(command: Command, instruction: Instruction) -> (bool, int) {
         valid = true
     }
   }
-  if running_opcode_info.bytes_set == 1 { // Byte
+  if cpu_state.instr_info.bytes_set == 1 { // Byte
     lhs := get_info_byte()
     rhs := action.has_rhs ? get_stash_byte() : 0
     
@@ -267,7 +267,7 @@ do_alu :: proc(command: Command, instruction: Instruction) -> (bool, int) {
     }
     put_byte_to_info(result)
     
-  } else if running_opcode_info.bytes_set == 2 { // Word
+  } else if cpu_state.instr_info.bytes_set == 2 { // Word
     lhs := get_info_word()
     
     #partial switch action.function {

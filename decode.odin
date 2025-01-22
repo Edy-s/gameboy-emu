@@ -2,9 +2,6 @@ package main
 
 nopsed := 0
 
-command_buffer : [dynamic]Command
-command_index  : int
-
 decode_next :: proc(prefixed: bool) -> (result: Instruction) {
   assert(len(command_buffer) == 0)
   
@@ -40,7 +37,7 @@ decode_next :: proc(prefixed: bool) -> (result: Instruction) {
     regs.word[.PC] += 1
   } else {
     print("No instruction found!!! Byte of note: %8b / %2x, at %x\n", instruction_byte, instruction_byte, regs.word[.PC])
-    panic("We should in practice always find an instruction.")
+    panic("We should always find an instruction.")
   }
   
   return result
