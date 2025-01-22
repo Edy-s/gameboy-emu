@@ -43,8 +43,8 @@ number_of_instructions_executed_succesfully := 0
 print_instruction_on_fail_only := true
 
 main :: proc() {
-  file, ok := os.read_entire_file_from_filename("D:/codes/gameboy_emulator/gb-test-roms/cpu_instrs/individual/09-op r,r.gb")
-  // file, ok := os.read_entire_file_from_filename("D:/codes/gameboy_emulator/gb-test-roms/cpu_instrs/individual/06-ld r,r.gb")
+  // file, ok := os.read_entire_file_from_filename("D:/codes/gameboy_emulator/gb-test-roms/cpu_instrs/individual/09-op r,r.gb")
+  file, ok := os.read_entire_file_from_filename("D:/codes/gameboy_emulator/gb-test-roms/cpu_instrs/individual/03-op sp,hl.gb")
   if !ok {
     print("Couldn't read file\n")
     return
@@ -67,6 +67,8 @@ main :: proc() {
   regs.word[.SP] = 0xFFFE
   regs.word[.PC] = 0x0100
 
+  transfer: bool
+  serial_data: [dynamic]u8
   
   for running {
     if len(os.args) > 1 { print("A:%2x F:%2x B:%2x C:%2x D:%2x E:%2x H:%2x L:%2x SP:%4x PC:%4x PCMEM:%2x,%2x,%2x,%2x\n", regs.byte[.A], regs.byte[.F], regs.byte[.B], regs.byte[.C], regs.byte[.D], regs.byte[.E], regs.byte[.H], regs.byte[.L], regs.word[.SP], regs.word[.PC], memory_map[program_counter^], memory_map[program_counter^+1], memory_map[program_counter^+2], memory_map[program_counter^+3]) }
@@ -79,15 +81,10 @@ main :: proc() {
     }
     // print("%-16v - 0x %2x; at %v\n", instruction.opcode_string, instruction.reference_byte, decoded_at)
     
-    anti_spinlock := 0
     valid := true
     for command_index < len(command_buffer) {
       valid = exec_command(instruction)
       
-      anti_spinlock += 1
-      if anti_spinlock > 100 {
-        panic("Spinlock!")
-      }
       if !valid { break }
     }
       
@@ -101,11 +98,14 @@ main :: proc() {
       running = false
     }
     
-    if program_counter^ > 0xFEA0 {
-      print("End of the line.\n")
-      running = false
+    if memory_map[0xFF02] & 0x80 != 0 { transfer = true }
+    if transfer {
+      // print("Test serial received: %c\n", memory_map[0xFF01])
+      
+      memory_map[0xFF02] &= ~u8(0x80)
+      transfer = false
+      // running = false
     }
-    
     
     {
       A  := regs.byte[.A]

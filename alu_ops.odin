@@ -230,27 +230,23 @@ do_alu :: proc(command: Command, instruction: Instruction) -> (bool, int) {
       if action.set_flags {
         clear_flag(.Zero)
         clear_flag(.Negative)
-        // do_flag(.Half_Carry)
-        // do_flag(.Carry)
+        _, carries := real_addition(u8(lhs), u8(rhs))
+        do_flag(.Half_Carry, carries[3])
+        do_flag(.Carry, carries[7])
       }
       
       put_word_to_info(result)
       
       cycles_used += 1
       valid = true
-    case .INC:
-      lhs += 1
-      put_word_to_info(lhs)
       
-      cycles_used += 1
-      valid = true
     case .ADD:
       assert(action.has_rhs)
       rhs := get_stash_word()
       small_rhs := u8(rhs & 0xFF)
       lsb, lsc := real_addition(u8(lhs), small_rhs)
-      carried :u8= lsc[7] ? 1 : 0
-      msb, carries := real_addition(u8(lhs >> 8), u8(rhs >> 8) + carried)
+      // carried :u8= lsc[7] ? 1 : 0
+      msb, carries := real_addition(u8(lhs >> 8), u8(rhs >> 8), pre_carry = lsc[7])
       
       result := (u16(msb) << 8) | u16(lsb)
       
@@ -259,6 +255,19 @@ do_alu :: proc(command: Command, instruction: Instruction) -> (bool, int) {
       do_flag(.Carry, carries[7])
       
       put_word_to_info(result)
+      
+      cycles_used += 1
+      valid = true
+      
+    case .INC:
+      lhs += 1
+      put_word_to_info(lhs)
+      
+      cycles_used += 1
+      valid = true
+    case .DEC:
+      lhs -= 1
+      put_word_to_info(lhs)
       
       cycles_used += 1
       valid = true

@@ -26,7 +26,7 @@ Command_Type :: enum {
 
 Command :: struct {
   type: Command_Type,
-  data: union { Register_Action, Memory_Action, Alu_Action }
+  data: union { Register_Action, Alu_Action }
 }
 
 Instruction :: struct {
@@ -39,7 +39,6 @@ Instruction :: struct {
 }
 
 Register_Action :: struct { reg: Op_Param_Type }
-Memory_Action   :: struct { address: Op_Param_Type }
 Alu_Action      :: struct { function: Alu_Function, has_rhs: bool, set_flags: bool }
 
 Alu_Function :: enum {

@@ -66,8 +66,9 @@ exec_command :: proc(instruction: Instruction) -> bool {
         valid = true
       }
     
-    case .pc, .r16, .r16stk, .hl:
+    case .pc, .r16, .r16stk, .hl, .sp, .r16mem:
       r16_reg: Reg_Word
+      r16mem_change: u16
          
       if action.reg == .r16 {
         r16_value := get_param(action.reg, instruction)
@@ -75,10 +76,15 @@ exec_command :: proc(instruction: Instruction) -> bool {
       } else if action.reg == .r16stk {
         r16_value := get_param(action.reg, instruction)
         r16_reg    = r16stk_mapping[r16_value]
+      } else if action.reg == .r16mem {
+        r16_value := get_param(action.reg, instruction)
+        r16_reg, r16mem_change = r16mem_mapping(r16_value)
       } else if action.reg == .pc {
         r16_reg = .PC
       } else if action.reg == .hl {
         r16_reg = .HL
+      } else if action.reg == .sp {
+        r16_reg = .SP
       }
       
       if command.type == .load {
@@ -92,36 +98,28 @@ exec_command :: proc(instruction: Instruction) -> bool {
         valid = true
       }
       
-    case:
+      if action.reg == .r16mem {
+        regs.word[.HL] += r16mem_change
+      }
+    
+    case .spl, .sph:
+      byte := action.reg == .spl ? regs.byte[.SPL] : regs.byte[.SPH]
+      put_byte_to_info(byte)
+      
+      valid = true
+      
     }
   
   case .read, .write:
-    action := command.data.(Memory_Action)
-    #partial switch action.address {
-    case .r16mem, .stash:
-      register: Reg_Word
-      change: u16
-      address: u16
-      
-      if action.address == .r16mem {
-        r16mem_value := get_param(action.address, instruction)
-        register, change = r16mem_mapping(r16mem_value)
-        address = regs.word[register]
-      } else if action.address == .stash {
-        address = get_stash_word()
-      }
-      
-      if      command.type == .read  {
-        if address == 0xFF44 { put_byte_to_info(0x90) } // todo: remove when gpu is in place hardcode because no gpu
-        else                 { put_byte_to_info(memory_map[address]) }
-      }
-      else if command.type == .write { memory_map[address] = get_info_byte() }
-      
-      regs.word[register] += change
-      cycles_used += 1
-      
-      valid = true
+    address := get_stash_word()
+    if command.type == .read {
+      if address == 0xFF44 { put_byte_to_info(0x90) } // todo: remove when gpu is in place hardcode because no gpu
+      else                 { put_byte_to_info(memory_map[address]) }
     }
+    else if command.type == .write { memory_map[address] = get_info_byte() }
+    
+    cycles_used += 1
+    valid = true
   
   case .alu:
     alu_cycles := 0
@@ -165,14 +163,15 @@ exec_command :: proc(instruction: Instruction) -> bool {
     running_opcode_info.bytes_set = 0
     running_opcode_info.data.word = 0
     valid = true
-    
   case .unstash:
     running_opcode_info.bytes_set = running_opcode_info.stash_set
     running_opcode_info.data.word = running_opcode_info.stash
     running_opcode_info.stash_set = 0
     running_opcode_info.stash     = 0
     valid = true
-  case:
+  case .inc_stash:
+    running_opcode_info.stash += 1
+    valid = true
   }
   
   if !valid {

@@ -81,6 +81,9 @@ clear_i :: Command{type = .clear_i}
 rst     :: Command{type = .rst}
 prefix  :: Command{type = .prefix}
 set_msb :: Command{type = .set_msb}
+
+write_mem :: Command{type = .write}
+read_mem  :: Command{type = .read}
 // illegal :: Command{type = .illegal}
 
 store_reg :: proc(param: Op_Param_Type) -> (cmd: Command) {
@@ -91,16 +94,6 @@ store_reg :: proc(param: Op_Param_Type) -> (cmd: Command) {
 load_reg :: proc(param: Op_Param_Type) -> (cmd: Command) {
   cmd.type = .load
   cmd.data = Register_Action{param}
-  return
-}
-write_mem :: proc(address: Op_Param_Type) -> (cmd: Command) {
-  cmd.type = .write
-  cmd.data = Memory_Action{address}
-  return
-}
-read_mem :: proc(address: Op_Param_Type) -> (cmd: Command) {
-  cmd.type = .read
-  cmd.data = Memory_Action{address}
   return
 }
 alu :: proc(function: Alu_Function, set_flags := true) -> (cmd: Command) {
@@ -121,9 +114,9 @@ opcode_table_v2 := [?]Op_Encoding_V2{
   {"nop", B("00000000"), {}}, // 1cc
   
   {"ld %v, word %v",   B("00w_0001"), {next, next, store_reg(.r16)}}, // 3cc
-  {"ld [%v], a",       B("00m_0010"), {load_reg(.a), write_mem(.r16mem)}}, // 2cc
-  {"ld a, [%v]",       B("00m_1010"), {read_mem(.r16mem), store_reg(.a)}}, // 2cc
-  {"ld [word %v], sp", B("00001000"), {next, next, stash, load_reg(.spl), write_mem(.stash), inc_stash, load_reg(.sph), write_mem(.stash)}}, // 5cc
+  {"ld [%v], a",       B("00m_0010"), {load_reg(.r16mem), stash, load_reg(.a), write_mem}}, // 2cc
+  {"ld a, [%v]",       B("00m_1010"), {load_reg(.r16mem), stash, read_mem, store_reg(.a)}}, // 2cc
+  {"ld [word %v], sp", B("00001000"), {next, next, stash, load_reg(.spl), write_mem, inc_stash, load_reg(.sph), write_mem}}, // 5cc
   
   {"inc %v",     B("00w_0011"), {load_reg(.r16), alu(.INC), store_reg(.r16)}}, // 2cc
   {"dec %v",     B("00w_1011"), {load_reg(.r16), alu(.DEC), store_reg(.r16)}}, // 2cc
@@ -205,12 +198,12 @@ opcode_table_v2 := [?]Op_Encoding_V2{
   
   {"", B("11001011"), {prefix}}, // 1cc
   
-  {"ldh [c],  a",      B("11100010"), {load_reg(.c), set_msb, stash, load_reg(.a), write_mem(.stash)}}, // 2cc
-  {"ldh [byte %v], a", B("11100000"), {next,         set_msb, stash, load_reg(.a), write_mem(.stash)}}, // 3cc
-  {"ld [word %v], a",  B("11101010"), {next,         next,    stash, load_reg(.a), write_mem(.stash)}}, // 4cc
-  {"ldh a, [c]",       B("11110010"), {load_reg(.c), set_msb, stash, read_mem(.stash), store_reg(.a)}}, // 2cc
-  {"ldh a, [byte %v]", B("11110000"), {next,         set_msb, stash, read_mem(.stash), store_reg(.a)}}, // 3cc
-  {"ld a, [word %v]",  B("11111010"), {next,         next,    stash, read_mem(.stash), store_reg(.a)}}, // 4cc
+  {"ldh [c],  a",      B("11100010"), {load_reg(.c), set_msb, stash, load_reg(.a), write_mem}}, // 2cc
+  {"ldh [byte %v], a", B("11100000"), {next,         set_msb, stash, load_reg(.a), write_mem}}, // 3cc
+  {"ld [word %v], a",  B("11101010"), {next,         next,    stash, load_reg(.a), write_mem}}, // 4cc
+  {"ldh a, [c]",       B("11110010"), {load_reg(.c), set_msb, stash, read_mem, store_reg(.a)}}, // 2cc
+  {"ldh a, [byte %v]", B("11110000"), {next,         set_msb, stash, read_mem, store_reg(.a)}}, // 3cc
+  {"ld a, [word %v]",  B("11111010"), {next,         next,    stash, read_mem, store_reg(.a)}}, // 4cc
   
   
   {"add sp, byte %v",      B("11101000"), {next, stash, load_reg(.sp), alu2(.SIGNED_ADD), clock, store_reg(.sp)}}, // 4cc
