@@ -11,15 +11,15 @@ running_opcode_info : struct {
 }
 
 
-exec_command :: proc(instruction: Instruction) -> bool {
+exec_command :: proc(instruction: Instruction) -> (int, bool) {
   command := command_buffer[command_index]
   cycles_used := 0
   valid := false
   
   #partial switch command.type {
   case .next:
-    byte := memory_map[program_counter^]
-    program_counter^ += 1
+    byte := memory_map[regs.word[.PC]]
+    regs.word[.PC] += 1
     add_byte_to_info(byte)
     
     valid = true
@@ -194,7 +194,7 @@ exec_command :: proc(instruction: Instruction) -> bool {
   assert(cycles_used < 2)
   command_index += 1
   
-  return valid
+  return cycles_used, valid
 }
 
 get_stash_word :: proc() -> u16 {

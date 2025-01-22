@@ -35,17 +35,14 @@ Registers :: struct #raw_union {
 regs : Registers
 flags := &regs.flags
 
-program_counter := &regs.word[.PC]
 interrupt_master_flag := 1
 
 memory_map : [0xFFFFF]u8
+cycle_index := 0
 
 number_of_instructions_executed_succesfully := 0
 
-print_instruction_on_fail_only := true
-
 main :: proc() {
-  
   {
     filename: string
     if len(os.args) > 1 { filename = os.args[1] }
@@ -63,9 +60,6 @@ main :: proc() {
     assert(len(file[:])-1 == 0x7FFF)
     copy(memory_map[0x0000:0x7FFF], file[:])
   }
-  
-  running := true
-  program_counter^ = 0x0100
   
   regs.byte[.A] = 0x01
   regs.byte[.F] = 0xB0
@@ -87,25 +81,36 @@ main :: proc() {
   
   serial_finish := 100_000_000
   
+  running := true
   for running {
     if len(os.args) > 2 {
       print_for_doc(&gb_doc_log)
     }
     
+    instruction_cycles := 1
     instruction := decode_next(false)
     if len(command_buffer) > 0 && command_buffer[0].type == .prefix {
       clear(&command_buffer)
       instruction = decode_next(true)
+      instruction_cycles += 1
     }
     // print("%-16v - 0x %2x; at %v\n", instruction.opcode_string, instruction.reference_byte, decoded_at)
     
     valid := true
     for command_index < len(command_buffer) {
-      valid = exec_command(instruction)
+      command_cycles := 0
+      command_cycles, valid = exec_command(instruction)
+      instruction_cycles += command_cycles
       
       if !valid { break }
     }
+    
+    if !((instruction_cycles == instruction.timing.min) || (instruction_cycles == instruction.timing.max)) {
+      print("\n\nBad timing!\ncycles taken: %v\ninfo: %v\n", instruction_cycles, instruction)
+      running = false
+    }
       
+    
     clear(&command_buffer)
     running_opcode_info = {}
     

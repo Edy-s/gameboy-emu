@@ -35,7 +35,8 @@ Instruction :: struct {
   params: [2]struct {
     type: Op_Param_Type,
     value: u8,
-  }
+  },
+  timing: struct { min, max: int }
 }
 
 Register_Action :: struct { reg: Op_Param_Type }

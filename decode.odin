@@ -20,6 +20,8 @@ decode_next :: proc(prefixed: bool) -> (result: Instruction) {
       
       result.opcode_string  = encoding.opcode_string
       result.reference_byte = instruction_byte
+      result.timing.min = encoding.timing.min
+      result.timing.max = encoding.timing.max
       for &param, i in result.params {
         param.type  = opcode.params[i].type
         param.value = (instruction_byte & opcode.params[i].mask) >> opcode.params[i].r_offset
