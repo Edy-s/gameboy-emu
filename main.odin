@@ -58,10 +58,24 @@ main :: proc() {
   running := true
   program_counter^ = 0x0100
   
+  regs_byte[.A] = 0x01
+  regs_byte[.F] = 0xB0
+  regs_byte[.B] = 0x00
+  regs_byte[.C] = 0x13
+  regs_byte[.D] = 0x00
+  regs_byte[.E] = 0xD8
+  regs_byte[.H] = 0x01
+  regs_byte[.L] = 0x4D
+  regs_word[.SP] = 0xFFFE
+  regs_word[.PC] = 0x0100
+
+  
   for running {
-    decoded_at := program_counter^
+    print("A:%2x F:%2x B:%2x C:%2x D:%2x E:%2x H:%2x L:%2x SP:%4x PC:%4x PCMEM:%2x,%2x,%2x,%2x\n", regs_byte[.A], regs_byte[.F], regs_byte[.B], regs_byte[.C], regs_byte[.D], regs_byte[.E], regs_byte[.H], regs_byte[.L], regs_word[.SP], regs_word[.PC], memory_map[program_counter^], memory_map[program_counter^+1], memory_map[program_counter^+2], memory_map[program_counter^+3])
+    
+    // decoded_at := program_counter^
     instruction := decode_next(false)
-    print("%-16v - 0x %2x; at %v\n", instruction.opcode_string, instruction.reference_byte, decoded_at)
+    // print("%-16v - 0x %2x; at %v\n", instruction.opcode_string, instruction.reference_byte, decoded_at)
     
     anti_spinlock := 0
     valid := true
@@ -74,7 +88,7 @@ main :: proc() {
       }
       if !valid { break }
     }
-    
+      
     clear(&command_buffer)
     running_opcode_info = {}
     

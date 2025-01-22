@@ -69,9 +69,12 @@ exec_command :: proc(instruction: Instruction) -> bool {
     case .pc, .r16, .r16stk:
       r16_reg: Reg_16bit
          
-      if action.reg == .r16 || action.reg == .r16stk {
+      if action.reg == .r16 {
         r16_value := get_param(action.reg, instruction)
-        r16_reg = r16_mapping[r16_value]
+        r16_reg    = r16_mapping[r16_value]
+      } else if action.reg == .r16stk {
+        r16_value := get_param(action.reg, instruction)
+        r16_reg    = r16stk_mapping[r16_value]
       } else if action.reg == .pc {
         r16_reg = .PC
       }
@@ -106,7 +109,10 @@ exec_command :: proc(instruction: Instruction) -> bool {
         address = get_stash_word()
       }
       
-      if      command.type == .read  { put_byte_to_info(memory_map[address]) }
+      if      command.type == .read  {
+        if address == 0xFF44 { put_byte_to_info(0x90) } // todo: remove when gpu is in place hardcode because no gpu
+        else                 { put_byte_to_info(memory_map[address]) }
+      }
       else if command.type == .write { memory_map[address] = get_info_byte() }
       
       regs_word[register] += change
@@ -118,63 +124,99 @@ exec_command :: proc(instruction: Instruction) -> bool {
   case .alu:
     action := command.data.(Alu_Action)
     if running_opcode_info.bytes_set == 1 { // Byte
-      byte := get_info_byte()
-      rhs: u8
-      if action.rhs != .none { assert(action.rhs == .a); rhs = regs_byte[.A] }
+      lhs := get_info_byte()
+      rhs := action.has_rhs ? get_stash_byte() : 0
+      
+      result: u8
+      carries: [8]bool
+      
       #partial switch action.function {
-      case .OR:
-        byte ~= rhs
+      case .AND:
+        result = lhs & rhs
         
+        do_flag(.Zero, result == 0)
+        clear_flag(.Negative)
+        set_flag(.Half_Carry)
+        clear_flag(.Carry)
+        
+        valid = true
+        
+      case .OR:
+        result = lhs | rhs
+        
+        do_flag(.Zero, result == 0)
         clear_flag(.Negative)
         clear_flag(.Half_Carry)
         clear_flag(.Carry)
         
         valid = true
       case .XOR:
-        byte ~= rhs
+        result = lhs ~ rhs
         
+        do_flag(.Zero, result == 0)
         clear_flag(.Negative)
         clear_flag(.Half_Carry)
         clear_flag(.Carry)
         
         valid = true
       case .INC:
-        byte += 1
+        result, carries = real_addition(lhs, 1)
         
+        do_flag(.Zero, result == 0)
         clear_flag(.Negative)
+        do_flag(.Half_Carry, carries[3])
         
         valid = true
       case .DEC:
-        byte -= 1
+        result, carries = real_subtraction(lhs, 1)
         
+        do_flag(.Zero, result == 0)
         set_flag(.Negative)
+        do_flag(.Half_Carry, carries[3])
+        
+        valid = true
+      case .ADD:
+        result, carries = real_addition(lhs, rhs)
+        
+        do_flag(.Zero, result == 0)
+        clear_flag(.Negative)
+        do_flag(.Half_Carry, carries[3])
+        do_flag(.Carry, carries[7])
+        
+        valid = true
+      case .SUB:
+        result, carries = real_subtraction(lhs, rhs)
+        
+        do_flag(.Zero, result == 0)
+        set_flag(.Negative)
+        do_flag(.Half_Carry, carries[3])
+        do_flag(.Carry, carries[7])
         
         valid = true
       case .CP:
-        byte -= rhs
+        result, carries = real_subtraction(lhs, rhs)
         
+        do_flag(.Zero, result == 0)
         set_flag(.Negative)
+        do_flag(.Half_Carry, carries[3])
+        do_flag(.Carry, carries[7])
+
+        result = lhs
         
         valid = true
       }
+      put_byte_to_info(result)
       
-      do_flag(.Zero, byte == 0)
-      // is_overflow := ((byte & 0xF) == 0)
-      // do_flag(.Half_Carry, is_overflow)
-      
-      put_byte_to_info(byte)
     } else if running_opcode_info.bytes_set == 2 { // Word
-      word := get_info_word()
+      lhs := get_info_word()
+      
       #partial switch action.function {
       case .SIGNED_ADD:
-        rhs: u16
-        rhs_reg := action.rhs
-        if rhs_reg == .stash {
-          rhs = u16(i16(i8(get_stash_byte())))
-          valid = true
-        }
+        assert(action.has_rhs)
+        rhs := u16(i16(i8(get_stash_byte())))
         
-        result := word + rhs
+        result := lhs + rhs
+        
         if action.set_flags {
           clear_flag(.Zero)
           clear_flag(.Negative)
@@ -183,10 +225,12 @@ exec_command :: proc(instruction: Instruction) -> bool {
         }
         
         put_word_to_info(result)
+        
         cycles_used += 1
+        valid = true
       case .INC:
-        word += 1
-        put_word_to_info(word)
+        lhs += 1
+        put_word_to_info(lhs)
         
         cycles_used += 1
         valid = true
@@ -287,8 +331,8 @@ get_info_byte :: proc() -> u8 {
 
 pop_info_byte :: proc() -> u8 {
   assert(running_opcode_info.bytes_set > 0)
-  if running_opcode_info.bytes_set == 2 { return running_opcode_info.data.bytes.msb }
-  if running_opcode_info.bytes_set == 1 { return running_opcode_info.data.bytes.lsb }
+  if running_opcode_info.bytes_set == 2 { running_opcode_info.bytes_set -= 1; return running_opcode_info.data.bytes.msb }
+  if running_opcode_info.bytes_set == 1 { running_opcode_info.bytes_set -= 1; return running_opcode_info.data.bytes.lsb }
   panic("Unreachable")
 }
 
@@ -318,7 +362,7 @@ r16mem_mapping :: proc(r16mem_value: u8) -> (reg: Reg_16bit, change: u16) {
   r16_map := [?]Reg_16bit{.BC, .DE, .HL, .HL}
   reg = r16_map[r16mem_value]
   if r16mem_value == 2 { change = 1 }
-  if r16mem_value == 3 { change = transmute(u16)(i16(-1)); panic("check this") }
+  if r16mem_value == 3 { change = transmute(u16)(i16(-1)) }
   
   return reg, change
 }
@@ -351,4 +395,41 @@ set_flag :: proc(flag: Flags) {
 clear_flag :: proc(flag: Flags) {
   flag_byte := &regs_byte[.F]
   flag_byte^ &= ~u8(flag)
+}
+
+real_addition :: proc(A, B: u8) -> (result: u8, carries: [8]bool) {
+  carry: bool
+  for i in 0..<8 {
+    mask := u8(1) << u8(i)
+    
+    after_carry := carry ? (~B & mask) : (B & mask)
+    
+    result |=  (A & mask) ~ after_carry
+    carry   = ((A & mask) & after_carry) != 0 || (carry && ((B & mask) != 0))
+    
+    if carry { carries[i] = true }
+  }
+  
+  assert(A+B == result)
+  if (A & B & 0x80 != 0) { assert(carries[7]) }
+  
+  return result, carries
+}
+
+real_subtraction :: proc(A, B: u8) -> (result: u8, carries: [8]bool) {
+  borrow: bool
+  for i in 0..<8 {
+    mask := u8(1) << u8(i)
+    
+    after_borrow := borrow ? (~B & mask) : (B & mask)
+    
+    result |=   (A & mask) ~ after_borrow
+    borrow  = ((~A & mask) & after_borrow) != 0 || (borrow && ((B & mask) != 0))
+    
+    if borrow { carries[i] = true }
+  }
+  
+  assert(A-B == result)
+  
+  return result, carries
 }

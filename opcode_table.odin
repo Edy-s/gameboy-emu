@@ -103,9 +103,15 @@ read_mem :: proc(address: Op_Param_Type) -> (cmd: Command) {
   cmd.data = Memory_Action{address}
   return
 }
-alu :: proc(function: Alu_Function, rhs: Op_Param_Type = .none, set_flags := true) -> (cmd: Command) {
+alu :: proc(function: Alu_Function, set_flags := true) -> (cmd: Command) {
   cmd.type = .alu
-  cmd.data = Alu_Action{function, rhs, set_flags}
+  cmd.data = Alu_Action{function, false, set_flags}
+  return
+}
+
+alu2 :: proc(function: Alu_Function, set_flags := true) -> (cmd: Command) {
+  cmd.type = .alu
+  cmd.data = Alu_Action{function, true, set_flags}
   return
 }
 
@@ -121,7 +127,7 @@ opcode_table_v2 := [?]Op_Encoding_V2{
   
   {"inc %v",     B("00w_0011"), {load_reg(.r16), alu(.INC), store_reg(.r16)}}, // 2cc
   {"dec %v",     B("00w_1011"), {load_reg(.r16), alu(.DEC), store_reg(.r16)}}, // 2cc
-  {"add hl, %v", B("00w_0011"), {load_reg(.hl),  alu(.ADD, .r16), store_reg(.hl)}}, // 2cc
+  {"add hl, %v", B("00w_0011"), {load_reg(.r16), stash, load_reg(.hl), alu2(.ADD), store_reg(.hl)}}, // 2cc
   
   {"inc %v", B("00r__100"), {load_reg(.r8), alu(.INC), store_reg(.r8)}}, // 1cc
   {"dec %v", B("00r__101"), {load_reg(.r8), alu(.DEC), store_reg(.r8)}}, // 1cc
@@ -138,8 +144,8 @@ opcode_table_v2 := [?]Op_Encoding_V2{
   {"scf", B("00110111"), {alu(.SCF)}}, // 1cc
   {"ccf", B("00111111"), {alu(.CCF)}}, // 1cc
   
-  {"jr %i",      B("00011000"), {next, stash,                  load_reg(.pc), alu(.SIGNED_ADD, .stash, set_flags = false), store_reg(.pc)}}, // 3cc // todo: check if this actually prints signed value 
-  {"jr %v, $%i", B("001c_000"), {next, stash, check_condition, load_reg(.pc), alu(.SIGNED_ADD, .stash, set_flags = false), store_reg(.pc)}}, // 2-3cc
+  {"jr %i",      B("00011000"), {next, stash,                  load_reg(.pc), alu2(.SIGNED_ADD, set_flags = false), store_reg(.pc)}}, // 3cc 
+  {"jr %v, $%i", B("001c_000"), {next, stash, check_condition, load_reg(.pc), alu2(.SIGNED_ADD, set_flags = false), store_reg(.pc)}}, // 2-3cc
   
   {"stop", B("00010000"), {stop}},
   
@@ -150,14 +156,14 @@ opcode_table_v2 := [?]Op_Encoding_V2{
   {"ld %v, %v", B("01d__s__"), {load_reg(.s8), store_reg(.d8)}}, // 1cc
   
   // Block 2
-  {"add a, %v", B("10000r__"), {load_reg(.r8), alu(.ADD, .a), store_reg(.a)}}, // 1-2cc
-  {"adc a, %v", B("10001r__"), {load_reg(.r8), alu(.ADC, .a), store_reg(.a)}}, // 1-2cc
-  {"sub a, %v", B("10010r__"), {load_reg(.r8), alu(.SUB, .a), store_reg(.a)}}, // 1-2cc
-  {"sbc a, %v", B("10011r__"), {load_reg(.r8), alu(.SBC, .a), store_reg(.a)}}, // 1-2cc
-  {"and a, %v", B("10100r__"), {load_reg(.r8), alu(.AND, .a), store_reg(.a)}}, // 1-2cc
-  {"xor a, %v", B("10101r__"), {load_reg(.r8), alu(.XOR, .a), store_reg(.a)}}, // 1-2cc
-  {"or  a, %v", B("10110r__"), {load_reg(.r8), alu(.OR,  .a), store_reg(.a)}}, // 1-2cc
-  {"cp  a, %v", B("10111r__"), {load_reg(.r8), alu(.CP,  .a), store_reg(.a)}}, // 1-2cc
+  {"add a, %v", B("10000r__"), {load_reg(.r8), stash, load_reg(.a), alu2(.ADD), store_reg(.a)}}, // 1-2cc
+  {"adc a, %v", B("10001r__"), {load_reg(.r8), stash, load_reg(.a), alu2(.ADC), store_reg(.a)}}, // 1-2cc
+  {"sub a, %v", B("10010r__"), {load_reg(.r8), stash, load_reg(.a), alu2(.SUB), store_reg(.a)}}, // 1-2cc
+  {"sbc a, %v", B("10011r__"), {load_reg(.r8), stash, load_reg(.a), alu2(.SBC), store_reg(.a)}}, // 1-2cc
+  {"and a, %v", B("10100r__"), {load_reg(.r8), stash, load_reg(.a), alu2(.AND), store_reg(.a)}}, // 1-2cc
+  {"xor a, %v", B("10101r__"), {load_reg(.r8), stash, load_reg(.a), alu2(.XOR), store_reg(.a)}}, // 1-2cc
+  {"or  a, %v", B("10110r__"), {load_reg(.r8), stash, load_reg(.a), alu2(.OR),  store_reg(.a)}}, // 1-2cc
+  {"cp  a, %v", B("10111r__"), {load_reg(.r8), stash, load_reg(.a), alu2(.CP),  store_reg(.a)}}, // 1-2cc
   
   // Block 3
   {"xxx", B("11010011"), {illegal}}, // 1cc
@@ -172,14 +178,14 @@ opcode_table_v2 := [?]Op_Encoding_V2{
   {"xxx", B("11111100"), {illegal}}, // 1cc
   {"xxx", B("11111101"), {illegal}}, // 1cc
   
-  {"add a, byte %i", B("11000110"), {next, alu(.ADD, .a), store_reg(.a)}}, // 2cc
-  {"adc a, byte %i", B("11001110"), {next, alu(.ADC, .a), store_reg(.a)}}, // 2cc
-  {"sub a, byte %i", B("11010110"), {next, alu(.SUB, .a), store_reg(.a)}}, // 2cc
-  {"sbc a, byte %i", B("11011110"), {next, alu(.SBC, .a), store_reg(.a)}}, // 2cc
-  {"and a, byte %i", B("11100110"), {next, alu(.AND, .a), store_reg(.a)}}, // 2cc
-  {"xor a, byte %i", B("11101110"), {next, alu(.XOR, .a), store_reg(.a)}}, // 2cc
-  {"or  a, byte %i", B("11110110"), {next, alu(.OR,  .a), store_reg(.a)}}, // 2cc
-  {"cp  a, byte %i", B("11111110"), {next, alu(.CP,  .a), store_reg(.a)}}, // 2cc
+  {"add a, byte %i", B("11000110"), {next, stash, load_reg(.a), alu2(.ADD), store_reg(.a)}}, // 2cc
+  {"adc a, byte %i", B("11001110"), {next, stash, load_reg(.a), alu2(.ADC), store_reg(.a)}}, // 2cc
+  {"sub a, byte %i", B("11010110"), {next, stash, load_reg(.a), alu2(.SUB), store_reg(.a)}}, // 2cc
+  {"sbc a, byte %i", B("11011110"), {next, stash, load_reg(.a), alu2(.SBC), store_reg(.a)}}, // 2cc
+  {"and a, byte %i", B("11100110"), {next, stash, load_reg(.a), alu2(.AND), store_reg(.a)}}, // 2cc
+  {"xor a, byte %i", B("11101110"), {next, stash, load_reg(.a), alu2(.XOR), store_reg(.a)}}, // 2cc
+  {"or  a, byte %i", B("11110110"), {next, stash, load_reg(.a), alu2(.OR),  store_reg(.a)}}, // 2cc
+  {"cp  a, byte %i", B("11111110"), {next, stash, load_reg(.a), alu2(.CP),  store_reg(.a)}}, // 2cc
   
   {"ret %v", B("110c_000"), {clock, check_condition, pop, pop, store_reg(.pc)}}, // 2-5cc
   {"ret",    B("11001001"), {pop, pop, store_reg(.pc)}}, // 4cc
@@ -207,8 +213,8 @@ opcode_table_v2 := [?]Op_Encoding_V2{
   {"ld a, [word %v]",  B("11111010"), {next,         next,    stash, read_mem(.stash), store_reg(.a)}}, // 4cc
   
   
-  {"add sp, byte %v",      B("11101000"), {next, alu(.SIGNED_ADD, .sp), clock, store_reg(.sp)}}, // 4cc
-  {"ld hl, sp + byte %v",  B("11111000"), {next, alu(.SIGNED_ADD, .sp), store_reg(.hl)}}, // 3cc
+  {"add sp, byte %v",      B("11101000"), {next, stash, load_reg(.sp), alu2(.SIGNED_ADD), clock, store_reg(.sp)}}, // 4cc
+  {"ld hl, sp + byte %v",  B("11111000"), {next, stash, load_reg(.sp), alu2(.SIGNED_ADD), store_reg(.hl)}}, // 3cc
   {"ld sp, hl",            B("11111001"), {load_reg(.hl), store_reg(.sp), clock}}, // 2cc
 
   {"di", B("11110011"), {clear_i}}, // 1cc
