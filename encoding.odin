@@ -29,6 +29,15 @@ Command :: struct {
   data: union { Register_Action, Memory_Action, Alu_Action }
 }
 
+Instruction :: struct {
+  opcode_string: string,
+  reference_byte: u8,
+  params: [2]struct {
+    type: Op_Param_Type,
+    value: u8,
+  }
+}
+
 Register_Action :: struct { reg: Op_Param_Type }
 Memory_Action   :: struct { address: Op_Param_Type }
 Alu_Action      :: struct { function: Alu_Function, has_rhs: bool, set_flags: bool }

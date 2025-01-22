@@ -5,19 +5,10 @@ nopsed := 0
 command_buffer : [dynamic]Command
 command_index  : int
 
-Instruction :: struct {
-  opcode_string: string,
-  reference_byte: u8,
-  params: [2]struct {
-    type: Op_Param_Type,
-    value: u8,
-  }
-}
-
 decode_next :: proc(prefixed: bool) -> (result: Instruction) {
   assert(len(command_buffer) == 0)
   
-  instruction_byte := memory_map[regs_word[.PC]]
+  instruction_byte := memory_map[regs.word[.PC]]
   found := false
   
   table := !prefixed ? opcode_table_v2[:] : opcode_table_prefixed_v2[:]
@@ -44,9 +35,9 @@ decode_next :: proc(prefixed: bool) -> (result: Instruction) {
   }
   
   if found {
-    regs_word[.PC] += 1
+    regs.word[.PC] += 1
   } else {
-    print("No instruction found!!! Byte of note: %8b / %2x, at %x\n", instruction_byte, instruction_byte, regs_word[.PC])
+    print("No instruction found!!! Byte of note: %8b / %2x, at %x\n", instruction_byte, instruction_byte, regs.word[.PC])
     panic("We should in practice always find an instruction.")
   }
   

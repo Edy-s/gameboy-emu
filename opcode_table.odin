@@ -127,20 +127,20 @@ opcode_table_v2 := [?]Op_Encoding_V2{
   
   {"inc %v",     B("00w_0011"), {load_reg(.r16), alu(.INC), store_reg(.r16)}}, // 2cc
   {"dec %v",     B("00w_1011"), {load_reg(.r16), alu(.DEC), store_reg(.r16)}}, // 2cc
-  {"add hl, %v", B("00w_0011"), {load_reg(.r16), stash, load_reg(.hl), alu2(.ADD), store_reg(.hl)}}, // 2cc
+  {"add hl, %v", B("00w_1001"), {load_reg(.r16), stash, load_reg(.hl), alu2(.ADD), store_reg(.hl)}}, // 2cc
   
   {"inc %v", B("00r__100"), {load_reg(.r8), alu(.INC), store_reg(.r8)}}, // 1cc
   {"dec %v", B("00r__101"), {load_reg(.r8), alu(.DEC), store_reg(.r8)}}, // 1cc
   
   {"ld %v", B("00r__110"), {next, store_reg(.r8)}}, // 2cc
   
-  {"rlca", B("00000111"), {load_reg(.a), alu(.RLC), store_reg(.a)}}, // 1cc
-  {"rrca", B("00001111"), {load_reg(.a), alu(.RRC), store_reg(.a)}}, // 1cc
-  {"rla",  B("00010111"), {load_reg(.a), alu(.RL),  store_reg(.a)}}, // 1cc
-  {"rra",  B("00011111"), {load_reg(.a), alu(.RR),  store_reg(.a)}}, // 1cc
+  {"rlca", B("00000111"), {load_reg(.a), alu(.RLC, set_flags = false), store_reg(.a)}}, // 1cc
+  {"rrca", B("00001111"), {load_reg(.a), alu(.RRC, set_flags = false), store_reg(.a)}}, // 1cc
+  {"rla",  B("00010111"), {load_reg(.a), alu(.RL, set_flags = false),  store_reg(.a)}}, // 1cc
+  {"rra",  B("00011111"), {load_reg(.a), alu(.RR, set_flags = false),  store_reg(.a)}}, // 1cc
   
-  {"daa", B("00100111"), {alu(.DAA)}}, // 1cc
-  {"cpl", B("00101111"), {alu(.CPL)}}, // 1cc
+  {"daa", B("00100111"), {load_reg(.a), alu(.DAA), store_reg(.a)}}, // 1cc
+  {"cpl", B("00101111"), {load_reg(.a), alu(.CPL), store_reg(.a)}}, // 1cc
   {"scf", B("00110111"), {alu(.SCF)}}, // 1cc
   {"ccf", B("00111111"), {alu(.CCF)}}, // 1cc
   
@@ -222,7 +222,7 @@ opcode_table_v2 := [?]Op_Encoding_V2{
 }
 
 @(private)
-opcode_table_prefixed_v2 := [?]Op_Encoding_V2{
+opcode_table_prefixed_v2 := [?]Op_Encoding_V2{ // +1 cc
   {"rlc %v",  B("00000r__"), {load_reg(.r8), alu(.RLC),  store_reg(.r8)}}, // 1-3cc
   {"rrc %v",  B("00001r__"), {load_reg(.r8), alu(.RRC),  store_reg(.r8)}}, // 1-3cc
   {"rl %v",   B("00010r__"), {load_reg(.r8), alu(.RL),   store_reg(.r8)}}, // 1-3cc
