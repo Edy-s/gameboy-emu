@@ -2,6 +2,8 @@ package main
 
 import "core:os"
 import "core:fmt"
+import "core:mem"
+import "core:strings"
 print :: fmt.printf
 
 Reg_Byte :: enum {
@@ -43,15 +45,24 @@ number_of_instructions_executed_succesfully := 0
 print_instruction_on_fail_only := true
 
 main :: proc() {
-  // file, ok := os.read_entire_file_from_filename("D:/codes/gameboy_emulator/gb-test-roms/cpu_instrs/individual/09-op r,r.gb")
-  file, ok := os.read_entire_file_from_filename("D:/codes/gameboy_emulator/gb-test-roms/cpu_instrs/individual/03-op sp,hl.gb")
-  if !ok {
-    print("Couldn't read file\n")
-    return
-  }
   
-  assert(len(file[:])-1 == 0x7FFF)
-  copy(memory_map[0x0000:0x7FFF], file[:])
+  {
+    filename: string
+    if len(os.args) > 1 { filename = os.args[1] }
+    else {
+      print("Provide first arg as filename.\n")
+      return
+    }
+    
+    file, ok := os.read_entire_file_from_filename(filename)
+    if !ok {
+      print("Couldn't read file!\n")
+      return
+    }
+    
+    assert(len(file[:])-1 == 0x7FFF)
+    copy(memory_map[0x0000:0x7FFF], file[:])
+  }
   
   running := true
   program_counter^ = 0x0100
@@ -67,13 +78,20 @@ main :: proc() {
   regs.word[.SP] = 0xFFFE
   regs.word[.PC] = 0x0100
 
-  transfer: bool
   serial_data: [dynamic]u8
   
+  gb_doc_log := strings.builder_make()
+  
+  RUN_GAPS :: 3_000_000
+  execution_cutoff := RUN_GAPS
+  
+  serial_finish := 100_000_000
+  
   for running {
-    if len(os.args) > 1 { print("A:%2x F:%2x B:%2x C:%2x D:%2x E:%2x H:%2x L:%2x SP:%4x PC:%4x PCMEM:%2x,%2x,%2x,%2x\n", regs.byte[.A], regs.byte[.F], regs.byte[.B], regs.byte[.C], regs.byte[.D], regs.byte[.E], regs.byte[.H], regs.byte[.L], regs.word[.SP], regs.word[.PC], memory_map[program_counter^], memory_map[program_counter^+1], memory_map[program_counter^+2], memory_map[program_counter^+3]) }
+    if len(os.args) > 2 {
+      print_for_doc(&gb_doc_log)
+    }
     
-    // decoded_at := program_counter^
     instruction := decode_next(false)
     if len(command_buffer) > 0 && command_buffer[0].type == .prefix {
       clear(&command_buffer)
@@ -94,35 +112,30 @@ main :: proc() {
     if valid {
       number_of_instructions_executed_succesfully += 1
     } else {
-      print("Number of instructions executed: %v\n", number_of_instructions_executed_succesfully)
       running = false
     }
     
-    if memory_map[0xFF02] & 0x80 != 0 { transfer = true }
-    if transfer {
-      // print("Test serial received: %c\n", memory_map[0xFF01])
-      
-      memory_map[0xFF02] &= ~u8(0x80)
-      transfer = false
-      // running = false
-    }
+    if number_of_instructions_executed_succesfully > serial_finish { running = false }
     
-    {
-      A  := regs.byte[.A]
-      B  := regs.byte[.B]
-      C  := regs.byte[.C]
-      D  := regs.byte[.D]
-      E  := regs.byte[.E]
-      H  := regs.byte[.H]
-      L  := regs.byte[.L]
-      BC := regs.word[.BC]
-      DE := regs.word[.DE]
-      HL := regs.word[.HL]
-      SP := regs.word[.SP]
-      X := 1
-      if false {
-        print("", A, B, C, D, E, H, L, BC, DE, HL, SP, X)
-      }
+    /*
+    if number_of_instructions_executed_succesfully > execution_cutoff {
+      print("x to stop: ")
+      in_thing: [10]u8
+      os.read(os.stdin, in_thing[:])
+      if in_thing[0] == 'x' { running = false }
+      execution_cutoff += RUN_GAPS
+    }*/
+    
+    if memory_map[0xFF02] & 0x80 != 0 {
+      print("%c", memory_map[0xFF01])
+      append(&serial_data, memory_map[0xFF01])
+      
+      pass_string := "Passed"
+      pass_u8 := transmute([]u8)pass_string
+      if len(serial_data) > 9 && mem.compare(serial_data[len(serial_data) - 7 : len(serial_data) - 1], pass_u8) == 0 { serial_finish = number_of_instructions_executed_succesfully + 1000000 }
+      memory_map[0xFF02] &= ~u8(0x80)
     }
   }
+  if strings.builder_len(gb_doc_log) > 0 { os.write_entire_file("doctor.log", transmute([]u8)strings.to_string(gb_doc_log)) }
+  print("Number of instructions executed: %v\n", number_of_instructions_executed_succesfully)
 }

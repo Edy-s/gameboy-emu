@@ -84,7 +84,6 @@ set_msb :: Command{type = .set_msb}
 
 write_mem :: Command{type = .write}
 read_mem  :: Command{type = .read}
-// illegal :: Command{type = .illegal}
 
 store_reg :: proc(param: Op_Param_Type) -> (cmd: Command) {
   cmd.type = .store
@@ -191,7 +190,7 @@ opcode_table_v2 := [?]Op_Encoding_V2{
   {"call %v, word $%v", B("110c_100"), {next, next, stash, check_condition, load_reg(.pc), push, push, unstash, store_reg(.pc)}}, // 3-6cc
   {"call word $%v",     B("11001101"), {next, next, stash,                  load_reg(.pc), push, push, unstash, store_reg(.pc)}}, // 6cc
   
-  {"rst %2x", B("11t__111"), {rst}}, // 4cc
+  {"rst %2x", B("11t__111"), {load_reg(.pc), push, push, rst}}, // 4cc
   
   {"pop  %v", B("11k_0001"), {pop, pop, store_reg(.r16stk)}}, // 3cc
   {"push %v", B("11k_0101"), {load_reg(.r16stk), clock, push, push}}, // 4cc
@@ -225,7 +224,7 @@ opcode_table_prefixed_v2 := [?]Op_Encoding_V2{ // +1 cc
   {"srl %v",  B("00111r__"), {load_reg(.r8), alu(.SRL),  store_reg(.r8)}}, // 1-3cc
   {"swap %v", B("00110r__"), {load_reg(.r8), alu(.SWAP), store_reg(.r8)}}, // 1-3cc
   
-  {"bit %v, %v,", B("01i__r__"), {load_reg(.r8), alu(.BIT), store_reg(.r8)}}, // 1-3cc
+  {"bit %v, %v,", B("01i__r__"), {load_reg(.r8), alu(.BIT)}}, // 1-3cc
   {"res %v, %v,", B("10i__r__"), {load_reg(.r8), alu(.RES), store_reg(.r8)}}, // 1-3cc
   {"set %v, %v,", B("11i__r__"), {load_reg(.r8), alu(.SET), store_reg(.r8)}}, // 1-3cc
 }

@@ -44,10 +44,11 @@ exec_command :: proc(instruction: Instruction) -> bool {
     action := command.data.(Register_Action)
     
     #partial switch action.reg {
-    case .s8, .d8, .r8, .a:
+    case .s8, .d8, .r8, .a, .c:
       r8_value: u8
-      if action.reg == .a { r8_value = 7 }
-      else                { r8_value = get_param(action.reg, instruction) }
+      if      action.reg == .a { r8_value = 7 }
+      else if action.reg == .c { r8_value = 1 }
+      else                     { r8_value = get_param(action.reg, instruction) }
       r8_reg, do_mem_hl := r8_mapping(r8_value)
       
       if command.type == .load {
@@ -94,6 +95,7 @@ exec_command :: proc(instruction: Instruction) -> bool {
       }
       if command.type == .store {
         regs.word[r16_reg] = get_info_word()
+        if r16_reg == .AF { regs.byte[.F] &= 0xF0 } // Aparently, the other bits of flag register don't exist in reality!
         
         valid = true
       }
@@ -141,7 +143,18 @@ exec_command :: proc(instruction: Instruction) -> bool {
     
     cycles_used += 1
     valid = true
+  
+  case .rst:
+    address := get_param(.tgt3, instruction)
+    regs.word[.PC] = u16(address * 0x08)
     
+    cycles_used += 1
+    valid = true
+
+  case .set_i:
+    // todo: flip this flag on next cycle
+    interrupt_master_flag = 1
+    valid = true    
   case .clear_i:
     // todo: flip this flag on next cycle
     interrupt_master_flag = 0
@@ -262,8 +275,6 @@ r16stk_mapping := [?]Reg_Word{.BC, .DE, .HL, .AF}
 
 
 get_flag :: proc(flag: Cpu_Flags) -> bool {
-  assert(flag != .Half_Carry, "use of this requires real bitwise implementation of math")
-  assert(flag != .Negative,   "use of this requires real bitwise implementation of math")
   return flag in flags
 }
 

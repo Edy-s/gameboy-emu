@@ -28,6 +28,32 @@ do_alu :: proc(command: Command, instruction: Instruction) -> (bool, int) {
     carries: [8]bool
     
     #partial switch action.function {
+    case .DAA:
+      if get_flag(.Negative) {
+        adj :u8= 0
+        adj += get_flag(.Half_Carry) ? 0x06 : 0
+        adj += get_flag(.Carry)      ? 0x60 : 0
+        
+        result, carries = real_subtraction(lhs, adj)
+        // if (lhs != 0) && (adj > lhs) { set_flag(.Carry) } apparently, you don't ever set carry!
+      } else {
+        adj :u8= 0
+        adj = (get_flag(.Half_Carry) || ((lhs & 0x0F) > 0x09)) ? 0x06 : 0
+        lhs, carries = real_addition(lhs, adj)
+        
+        if carries[7] { set_flag(.Carry) }
+        adj = 0
+        adj += (get_flag(.Carry)     || ((lhs)        > 0x9F)) ? 0x60 : 0
+        result, carries = real_addition(lhs, adj)
+        
+        if carries[7] { set_flag(.Carry) }
+      }
+      
+      do_flag(.Zero, result == 0)
+      clear_flag(.Half_Carry)
+      
+      valid = true
+      
     case .AND:
       result = lhs & rhs
       
@@ -214,6 +240,30 @@ do_alu :: proc(command: Command, instruction: Instruction) -> (bool, int) {
       clear_flag(.Carry)
       
       valid = true
+      
+    case .BIT:
+      bit_index := get_param(.bi3, instruction)
+      mask := u8(1) << bit_index
+      result = lhs & mask
+      
+      do_flag(.Zero, result == 0)
+      clear_flag(.Negative)
+      set_flag(.Half_Carry)
+      
+      valid = true
+    case .RES:
+      bit_index := get_param(.bi3, instruction)
+      mask := u8(1) << bit_index
+      result = lhs & ~mask
+      
+      valid = true
+    case .SET:
+      bit_index := get_param(.bi3, instruction)
+      mask := u8(1) << bit_index
+      result = lhs | mask
+      
+      valid = true
+      
     }
     put_byte_to_info(result)
     
@@ -245,7 +295,6 @@ do_alu :: proc(command: Command, instruction: Instruction) -> (bool, int) {
       rhs := get_stash_word()
       small_rhs := u8(rhs & 0xFF)
       lsb, lsc := real_addition(u8(lhs), small_rhs)
-      // carried :u8= lsc[7] ? 1 : 0
       msb, carries := real_addition(u8(lhs >> 8), u8(rhs >> 8), pre_carry = lsc[7])
       
       result := (u16(msb) << 8) | u16(lsb)
