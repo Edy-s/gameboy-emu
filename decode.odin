@@ -2,10 +2,8 @@ package main
 
 nopsed := 0
 
-decode_next :: proc(prefixed: bool) -> (result: Instruction) {
-  assert(len(command_buffer) == 0)
-  
-  instruction_byte := memory_map[regs.word[.PC]]
+decode_next :: proc(prefixed: bool) -> (result: Opcode, commands: []Command) {
+  instruction_byte := read_at(regs.word[.PC])
   found := false
   
   table := !prefixed ? opcode_table_v2[:] : opcode_table_prefixed_v2[:]
@@ -24,10 +22,7 @@ decode_next :: proc(prefixed: bool) -> (result: Instruction) {
         param.value = (instruction_byte & opcode.params[i].mask) >> opcode.params[i].r_offset
       }
       
-      command_index = 0
-      for cmd in encoding.commands {
-        append(&command_buffer, cmd)
-      }
+      commands = encoding.commands[:]
       
       break
     }
@@ -40,5 +35,5 @@ decode_next :: proc(prefixed: bool) -> (result: Instruction) {
     panic("We should always find an instruction.")
   }
   
-  return result
+  return result, commands
 }

@@ -1,10 +1,10 @@
 package main
 
-do_alu :: proc(command: Command, instruction: Instruction) -> (bool, int) {
+do_alu :: proc(command: Command, opcode: Opcode) -> (bool, int) {
   valid       := false
   cycles_used := 0
   action := command.data.(Alu_Action)
-  if cpu_state.instr_info.bytes_set == 0 { // Non data functions
+  if instr_state.info.bytes_set == 0 { // Non data functions
     #partial switch action.function {
       case .SCF:
         clear_flag(.Negative)
@@ -20,7 +20,7 @@ do_alu :: proc(command: Command, instruction: Instruction) -> (bool, int) {
         valid = true
     }
   }
-  if cpu_state.instr_info.bytes_set == 1 { // Byte
+  if instr_state.info.bytes_set == 1 { // Byte
     lhs := get_info_byte()
     rhs := action.has_rhs ? get_stash_byte() : 0
     
@@ -242,7 +242,7 @@ do_alu :: proc(command: Command, instruction: Instruction) -> (bool, int) {
       valid = true
       
     case .BIT:
-      bit_index := get_param(.bi3, instruction)
+      bit_index := get_param(.bi3, opcode)
       mask := u8(1) << bit_index
       result = lhs & mask
       
@@ -252,13 +252,13 @@ do_alu :: proc(command: Command, instruction: Instruction) -> (bool, int) {
       
       valid = true
     case .RES:
-      bit_index := get_param(.bi3, instruction)
+      bit_index := get_param(.bi3, opcode)
       mask := u8(1) << bit_index
       result = lhs & ~mask
       
       valid = true
     case .SET:
-      bit_index := get_param(.bi3, instruction)
+      bit_index := get_param(.bi3, opcode)
       mask := u8(1) << bit_index
       result = lhs | mask
       
@@ -267,7 +267,7 @@ do_alu :: proc(command: Command, instruction: Instruction) -> (bool, int) {
     }
     put_byte_to_info(result)
     
-  } else if cpu_state.instr_info.bytes_set == 2 { // Word
+  } else if instr_state.info.bytes_set == 2 { // Word
     lhs := get_info_word()
     
     #partial switch action.function {

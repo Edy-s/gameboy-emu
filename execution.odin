@@ -1,11 +1,9 @@
 package main
 
-exec_command :: proc(instruction: Instruction) -> (cycles_used: int, valid: bool, conditioned: bool) {
-  command := command_buffer[command_index]
-  
+exec_command :: proc(command: Command, opcode: Opcode) -> (cycles_used: int, valid: bool, conditioned: bool) {
   #partial switch command.type {
   case .next:
-    byte := memory_map[regs.word[.PC]]
+    byte := read_at(regs.word[.PC])
     regs.word[.PC] += 1
     add_byte_to_info(byte)
     
@@ -13,7 +11,7 @@ exec_command :: proc(instruction: Instruction) -> (cycles_used: int, valid: bool
     cycles_used += 1
   
   case .check_condition:
-    cond := get_param(.cond, instruction)
+    cond := get_param(.cond, opcode)
     
     pass: bool
     switch cond {
@@ -35,13 +33,13 @@ exec_command :: proc(instruction: Instruction) -> (cycles_used: int, valid: bool
       r8_value: u8
       if      action.reg == .a { r8_value = 7 }
       else if action.reg == .c { r8_value = 1 }
-      else                     { r8_value = get_param(action.reg, instruction) }
+      else                     { r8_value = get_param(action.reg, opcode) }
       r8_reg, do_mem_hl := r8_mapping(r8_value)
       
       if command.type == .load {
         byte: u8
         if !do_mem_hl { byte = regs.byte[r8_reg] }
-        else          { byte = memory_map[regs.word[.HL]]; cycles_used += 1 }
+        else          { byte = read_at(regs.word[.HL]); cycles_used += 1 }
         put_byte_to_info(byte)
         
         valid = true
@@ -49,7 +47,7 @@ exec_command :: proc(instruction: Instruction) -> (cycles_used: int, valid: bool
       if command.type == .store {
         byte := get_info_byte()
         if !do_mem_hl { regs.byte[r8_reg] = byte }
-        else          { memory_map[regs.word[.HL]] = byte; cycles_used += 1 }
+        else          { write_at(regs.word[.HL], byte); cycles_used += 1 }
         
         valid = true
       }
@@ -59,13 +57,13 @@ exec_command :: proc(instruction: Instruction) -> (cycles_used: int, valid: bool
       r16mem_change: u16
          
       if action.reg == .r16 {
-        r16_value := get_param(action.reg, instruction)
+        r16_value := get_param(action.reg, opcode)
         r16_reg    = r16_mapping[r16_value]
       } else if action.reg == .r16stk {
-        r16_value := get_param(action.reg, instruction)
+        r16_value := get_param(action.reg, opcode)
         r16_reg    = r16stk_mapping[r16_value]
       } else if action.reg == .r16mem {
-        r16_value := get_param(action.reg, instruction)
+        r16_value := get_param(action.reg, opcode)
         r16_reg, r16mem_change = r16mem_mapping(r16_value)
       } else if action.reg == .pc {
         r16_reg = .PC
@@ -103,28 +101,28 @@ exec_command :: proc(instruction: Instruction) -> (cycles_used: int, valid: bool
     address := get_stash_word()
     if command.type == .read {
       if address == 0xFF44 { put_byte_to_info(0x90) } // todo: remove when gpu is in place hardcode because no gpu
-      else                 { put_byte_to_info(memory_map[address]) }
+      else                 { put_byte_to_info(read_at(address)) }
     }
-    else if command.type == .write { memory_map[address] = get_info_byte() }
+    else if command.type == .write { write_at(address, get_info_byte()) }
     
     cycles_used += 1
     valid = true
   
   case .alu:
     alu_cycles := 0
-    valid, alu_cycles = do_alu(command, instruction)
+    valid, alu_cycles = do_alu(command, opcode)
     cycles_used += alu_cycles
     
   case .push:
     byte := pop_info_byte()
     regs.word[.SP] -= 1
-    memory_map[regs.word[.SP]] = byte
+    write_at(regs.word[.SP], byte)
     
     cycles_used += 1
     valid = true
 
   case .pop:
-    byte := memory_map[regs.word[.SP]]
+    byte := read_at(regs.word[.SP])
     regs.word[.SP] += 1
     add_byte_to_info(byte)
     
@@ -132,7 +130,7 @@ exec_command :: proc(instruction: Instruction) -> (cycles_used: int, valid: bool
     valid = true
   
   case .rst:
-    address := get_param(.tgt3, instruction)
+    address := get_param(.tgt3, opcode)
     regs.word[.PC] = u16(address * 0x08)
     
     cycles_used += 1
@@ -152,30 +150,30 @@ exec_command :: proc(instruction: Instruction) -> (cycles_used: int, valid: bool
     valid = true
   
   case .set_msb:
-    assert(cpu_state.instr_info.bytes_set == 1)
-    cpu_state.instr_info.data.bytes.msb = 0xFF
-    cpu_state.instr_info.bytes_set += 1
+    assert(instr_state.info.bytes_set == 1)
+    instr_state.info.data.bytes.msb = 0xFF
+    instr_state.info.bytes_set += 1
     valid = true
   
   case .stash:
-    cpu_state.instr_info.stash_set = cpu_state.instr_info.bytes_set
-    cpu_state.instr_info.stash     = cpu_state.instr_info.data.word
-    cpu_state.instr_info.bytes_set = 0
-    cpu_state.instr_info.data.word = 0
+    instr_state.info.stash_set = instr_state.info.bytes_set
+    instr_state.info.stash     = instr_state.info.data.word
+    instr_state.info.bytes_set = 0
+    instr_state.info.data.word = 0
     valid = true
   case .unstash:
-    cpu_state.instr_info.bytes_set = cpu_state.instr_info.stash_set
-    cpu_state.instr_info.data.word = cpu_state.instr_info.stash
-    cpu_state.instr_info.stash_set = 0
-    cpu_state.instr_info.stash     = 0
+    instr_state.info.bytes_set = instr_state.info.stash_set
+    instr_state.info.data.word = instr_state.info.stash
+    instr_state.info.stash_set = 0
+    instr_state.info.stash     = 0
     valid = true
   case .inc_stash:
-    cpu_state.instr_info.stash += 1
+    instr_state.info.stash += 1
     valid = true
   }
   
   if !valid {
-    print("Unimplemented command!\n%v\ninstruction params: %v\ninfo: %v; data %4x\n", command_buffer[command_index], instruction.params, cpu_state.instr_info, cpu_state.instr_info.data.word)
+    print("Unimplemented command!\n%v\nopcode params: %v\ninfo: %v; data %4x\n", get_command(), opcode.params, instr_state.info, instr_state.info.data.word)
   }
   
   assert(cycles_used < 2)
@@ -183,55 +181,55 @@ exec_command :: proc(instruction: Instruction) -> (cycles_used: int, valid: bool
 }
 
 get_stash_word :: proc() -> u16 {
-  assert(cpu_state.instr_info.stash_set == 2)
-  return cpu_state.instr_info.stash
+  assert(instr_state.info.stash_set == 2)
+  return instr_state.info.stash
 }
 
 get_stash_byte :: proc() -> u8 {
-  assert(cpu_state.instr_info.stash_set == 1)
-  return u8(cpu_state.instr_info.stash)
+  assert(instr_state.info.stash_set == 1)
+  return u8(instr_state.info.stash)
 }
 
 add_byte_to_info :: proc(byte: u8) {
-  if      cpu_state.instr_info.bytes_set == 0 { cpu_state.instr_info.data.bytes.lsb = byte }
-  else if cpu_state.instr_info.bytes_set == 1 { cpu_state.instr_info.data.bytes.msb = byte }
+  if      instr_state.info.bytes_set == 0 { instr_state.info.data.bytes.lsb = byte }
+  else if instr_state.info.bytes_set == 1 { instr_state.info.data.bytes.msb = byte }
   else { panic("Unreachable.") }
-  cpu_state.instr_info.bytes_set += 1
+  instr_state.info.bytes_set += 1
 }
 
 put_byte_to_info :: proc(byte: u8) {
-  assert(cpu_state.instr_info.bytes_set == 0)
-  cpu_state.instr_info.data.bytes.lsb = byte
-  cpu_state.instr_info.bytes_set += 1
+  assert(instr_state.info.bytes_set == 0)
+  instr_state.info.data.bytes.lsb = byte
+  instr_state.info.bytes_set += 1
 }
 
 put_word_to_info :: proc(word: u16) {
-  assert(cpu_state.instr_info.bytes_set == 0)
-  cpu_state.instr_info.data.word = word
-  cpu_state.instr_info.bytes_set += 2
+  assert(instr_state.info.bytes_set == 0)
+  instr_state.info.data.word = word
+  instr_state.info.bytes_set += 2
 }
 
 get_info_byte :: proc() -> u8 {
-  assert(cpu_state.instr_info.bytes_set == 1)
-  cpu_state.instr_info.bytes_set -= 1
-  return cpu_state.instr_info.data.bytes.lsb
+  assert(instr_state.info.bytes_set == 1)
+  instr_state.info.bytes_set -= 1
+  return instr_state.info.data.bytes.lsb
 }
 
 pop_info_byte :: proc() -> u8 {
-  assert(cpu_state.instr_info.bytes_set > 0)
-  if cpu_state.instr_info.bytes_set == 2 { cpu_state.instr_info.bytes_set -= 1; return cpu_state.instr_info.data.bytes.msb }
-  if cpu_state.instr_info.bytes_set == 1 { cpu_state.instr_info.bytes_set -= 1; return cpu_state.instr_info.data.bytes.lsb }
+  assert(instr_state.info.bytes_set > 0)
+  if instr_state.info.bytes_set == 2 { instr_state.info.bytes_set -= 1; return instr_state.info.data.bytes.msb }
+  if instr_state.info.bytes_set == 1 { instr_state.info.bytes_set -= 1; return instr_state.info.data.bytes.lsb }
   panic("Unreachable")
 }
 
 get_info_word :: proc() -> u16 {
-  assert(cpu_state.instr_info.bytes_set == 2)
-  cpu_state.instr_info.bytes_set -= 2
-  return cpu_state.instr_info.data.word
+  assert(instr_state.info.bytes_set == 2)
+  instr_state.info.bytes_set -= 2
+  return instr_state.info.data.word
 }
 
-get_param :: proc(type: Op_Param_Type, instr: Instruction) -> u8 {
-  for param in instr.params {
+get_param :: proc(type: Op_Param_Type, op: Opcode) -> u8 {
+  for param in op.params {
     if param.type == type {
       return param.value
     }

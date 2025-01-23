@@ -42,20 +42,20 @@ print_for_doc :: proc(sb: ^strings.Builder) {
   
   pc := regs.word[.PC]
   strings.write_string(sb, " PCMEM:")
-  if memory_map[pc] < 0x10 { strings.write_string(sb, "0") }
-  strings.write_u64(sb, u64(memory_map[pc]), 16)
+  if read_at(pc) < 0x10 { strings.write_string(sb, "0") }
+  strings.write_u64(sb, u64(read_at(pc)), 16)
   strings.write_string(sb, ",")
   pc += 1
-  if memory_map[pc] < 0x10 { strings.write_string(sb, "0") }
-  strings.write_u64(sb, u64(memory_map[pc]), 16)
+  if read_at(pc) < 0x10 { strings.write_string(sb, "0") }
+  strings.write_u64(sb, u64(read_at(pc)), 16)
   pc += 1
   strings.write_string(sb, ",")
-  if memory_map[pc] < 0x10 { strings.write_string(sb, "0") }
-  strings.write_u64(sb, u64(memory_map[pc]), 16)
+  if read_at(pc) < 0x10 { strings.write_string(sb, "0") }
+  strings.write_u64(sb, u64(read_at(pc)), 16)
   pc += 1
   strings.write_string(sb, ",")
-  if memory_map[pc] < 0x10 { strings.write_string(sb, "0") }
-  strings.write_u64(sb, u64(memory_map[pc]), 16)
+  if read_at(pc) < 0x10 { strings.write_string(sb, "0") }
+  strings.write_u64(sb, u64(read_at(pc)), 16)
   strings.write_string(sb, "\n")
-  // fmt.sbprintf(sb, "A:%2x F:%2x B:%2x C:%2x D:%2x E:%2x H:%2x L:%2x SP:%4x PC:%4x PCMEM:%2x,%2x,%2x,%2x\n", regs.byte[.A], regs.byte[.F], regs.byte[.B], regs.byte[.C], regs.byte[.D], regs.byte[.E], regs.byte[.H], regs.byte[.L], regs.word[.SP], regs.word[.PC], memory_map[pc], memory_map[pc+1], memory_map[pc+2], memory_map[pc+3])
+  // fmt.sbprintf(sb, "A:%2x F:%2x B:%2x C:%2x D:%2x E:%2x H:%2x L:%2x SP:%4x PC:%4x PCMEM:%2x,%2x,%2x,%2x\n", regs.byte[.A], regs.byte[.F], regs.byte[.B], regs.byte[.C], regs.byte[.D], regs.byte[.E], regs.byte[.H], regs.byte[.L], regs.word[.SP], regs.word[.PC], read_at(pc), memory_map[pc+1], memory_map[pc+2], memory_map[pc+3])
 }
