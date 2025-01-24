@@ -5,33 +5,32 @@ import "core:fmt"
 import "core:mem"
 import "core:strings"
 print :: fmt.printf
+import rl "vendor:raylib"
+
+// import rg "memory_regions"
 
 cycle_index := 0
 
-number_of_instructions_executed_succesfully := 0
 
 main :: proc() {
 
   serial_data: [dynamic]u8
-  
-  gb_doc_log := strings.builder_make()
+  init_log()
   
   RUN_GAPS :: 3_000_000
   // execution_cutoff := RUN_GAPS
-  
   serial_finish := 100_000_000
   
+  
   init_GPU()
+  init_CPU()
   ok := init_memory()
   if !ok { return }
   
+  log_for_doc()
   running := true
   for running {
-    if len(os.args) > 2 {
-      print_for_doc(&gb_doc_log)
-    }
-    
-    do_memory_tick()
+    do_chip_tick()
     
     cpu_success := do_CPU_tick()
     if !cpu_success { running = false }
@@ -42,7 +41,7 @@ main :: proc() {
     cycle_index += 1
     
     
-    
+    if rl.WindowShouldClose() { running = false }
     if number_of_instructions_executed_succesfully > serial_finish { running = false }
     
     /*

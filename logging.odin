@@ -1,8 +1,19 @@
 package main
 
 import "core:strings"
+import "core:os"
 
-print_for_doc :: proc(sb: ^strings.Builder) {
+gb_doc_log: strings.Builder
+log_line: int
+
+init_log :: proc() {
+  gb_doc_log := strings.builder_make()
+}
+
+log_for_doc :: proc() {
+  if len(os.args) != 3 { return }
+  log_line += 1
+  sb := &gb_doc_log
   strings.write_string(sb, "A:")
   if regs.byte[.A] < 0x10 { strings.write_string(sb, "0") }
   strings.write_u64(sb, u64(regs.byte[.A]), 16)

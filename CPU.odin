@@ -29,7 +29,8 @@ Registers :: struct #raw_union {
 regs : Registers
 flags := &regs.flags
 
-interrupt_master_flag := 1
+interrupt_enable_requested: bool
+interrupt_master_flag: bool
 
 init_CPU :: proc() {
   regs.byte[.A] = 0x01
@@ -42,19 +43,43 @@ init_CPU :: proc() {
   regs.byte[.L] = 0x4D
   regs.word[.SP] = 0xFFFE
   regs.word[.PC] = 0x0100
+  
+  interrupt_master_flag = false
 }
 
 do_CPU_tick :: proc() -> (valid: bool) {
-  if cycle_index % 4 == 0 { return true }
+  if cycle_index % 4 != 0 { return true }
+  if interrupt_enable_requested {
+    interrupt_enable_requested = false
+    interrupt_master_flag = true
+  }
+  
   valid = true
   conditioned := false
   tick_done := false
   for !tick_done && valid {
     if instr_state == {} {
       instr_state.op, command_buffer = decode_next(false)
+      
+      // handle interrupts here
+      if interrupt_master_flag && raw_memory_map[rg.INTERRUPT_FLAGS] != 0 {
+        instr_state = {}
+        interrupt_master_flag = false
+        command_buffer = INTERRUPT_COMMANDS[:]
+      }
       tick_done = true
     } else if command_buffer[0].type == .prefix {
       instr_state.op, command_buffer = decode_next(true)
+      tick_done = true
+    } else if command_buffer[0].type == .halt {
+      if !instr_state.halted { log_for_doc() }
+      instr_state.halted = true
+      toggles := get_byte_as_flags(rg.Interrupt_Flags, rg.INTERRUPT_TOGGLES)
+      tg_byte := raw_memory_map[rg.INTERRUPT_TOGGLES]
+      
+      if (raw_memory_map[rg.INTERRUPT_FLAGS] & raw_memory_map[rg.INTERRUPT_TOGGLES]) != 0 {
+        command_index += 1
+      }
       tick_done = true
     } else {
       command_cycles := 0
@@ -69,20 +94,27 @@ do_CPU_tick :: proc() -> (valid: bool) {
     if tick_done { instr_state.cycles += 1 }
     
     if command_index == len(command_buffer) || conditioned {
-      if !((instr_state.cycles == instr_state.op.timing.min) || (instr_state.cycles == instr_state.op.timing.max)) {
+      if (instr_state.op.timing != {}) && (!((instr_state.cycles == instr_state.op.timing.min) || (instr_state.cycles == instr_state.op.timing.max))) {
         print("\n\nBad timing!\ncycles taken: %v\ninfo: %v\n", instr_state.cycles, instr_state.op)
         valid = false
       }
       
       number_of_instructions_executed_succesfully += 1
       
-      command_index = 0
+      if len(command_buffer) == 0 {
+        print("???\n")
+      }
+      if !instr_state.halted && len(command_buffer) != 0 && command_buffer[len(command_buffer) - 1].type != .handle_interrupt { log_for_doc() }
       
+      command_index = 0
       instr_state = {}
       conditioned = false
     }
   }
   
+  if !valid {
+    print("Unimplemented command!\n%v\nopcode params: %v\ninfo: %v; data %4x\n", get_command(), instr_state.op.params, instr_state.info, instr_state.info.data.word)
+  }
   
   return valid
 }
@@ -90,6 +122,8 @@ do_CPU_tick :: proc() -> (valid: bool) {
 instr_state : struct {
   op: Opcode,
   cycles: int,
+  
+  halted: bool,
   
   info: struct {
     bytes_set: u8,
@@ -101,6 +135,8 @@ instr_state : struct {
     stash_set: u8,
   },
 }
+
+number_of_instructions_executed_succesfully := 0
 
 @(private = "file")
 command_buffer: []Command
@@ -114,3 +150,5 @@ get_command :: proc() -> Command {
 has_commands :: proc() -> bool {
   return command_index < len(command_buffer)
 }
+
+import rg "memory_regions"

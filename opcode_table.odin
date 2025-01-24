@@ -22,96 +22,13 @@ Opcode :: struct {
   params: [2]Op_Param,
 }
 
-B :: proc(bit_pattern: string) -> (result: Opcode) {
-  assert(len(bit_pattern) == 8)
-  
-  params_found := -1
-  nil_param: Op_Param
-  edit_param: ^Op_Param = &nil_param
-  
-  for char, i in bit_pattern {
-    result.mask  <<= 1
-    result.value <<= 1
-    result.params[0].mask <<= 1
-    result.params[1].mask <<= 1
-    switch char {
-    case '1':
-      result.value |= 1
-      result.mask  |= 1
-      
-      edit_param.r_offset = 8 - u8(i)
-      edit_param = &nil_param
-      
-    case '0':
-      result.mask  |= 1
-      
-      edit_param.r_offset = 8 - u8(i)
-      edit_param = &nil_param
-      
-    case 'r', 'w', 'k', 'm', 'c', 'i', 't', 'd', 's':
-      edit_param.r_offset = 8 - u8(i)
-      
-      params_found += 1
-      edit_param = &result.params[params_found]
-      edit_param.type = Op_Param_Type(char)
-      edit_param.mask     |= 1
-      
-    case '_':
-      edit_param.mask |= 1
-      
-    case:
-      panic(fmt.aprintf("Undesired character in a bit pattern - %v. Full string: %v\n", char, bit_pattern))
-    }
-  }
-  return
-}
-
-next      :: Command{type = .next}
-stash     :: Command{type = .stash}
-unstash   :: Command{type = .unstash}
-inc_stash :: Command{type = .inc_stash}
-check_condition :: Command{type = .check_condition}
-stop    :: Command{type = .stop}
-halt    :: Command{type = .halt}
-illegal :: Command{type = .illegal}
-clock   :: Command{type = .clock}
-push    :: Command{type = .push}
-pop     :: Command{type = .pop}
-set_i   :: Command{type = .set_i}
-clear_i :: Command{type = .clear_i}
-rst     :: Command{type = .rst}
-prefix  :: Command{type = .prefix}
-set_msb :: Command{type = .set_msb}
-
-write_mem :: Command{type = .write}
-read_mem  :: Command{type = .read}
-
-store_reg :: proc(param: Op_Param_Type) -> (cmd: Command) {
-  cmd.type = .store
-  cmd.data = Register_Action{param}
-  return
-}
-load_reg :: proc(param: Op_Param_Type) -> (cmd: Command) {
-  cmd.type = .load
-  cmd.data = Register_Action{param}
-  return
-}
-alu :: proc(function: Alu_Function, set_flags := true) -> (cmd: Command) {
-  cmd.type = .alu
-  cmd.data = Alu_Action{function, false, set_flags}
-  return
-}
-
-alu2 :: proc(function: Alu_Function, set_flags := true) -> (cmd: Command) {
-  cmd.type = .alu
-  cmd.data = Alu_Action{function, true, set_flags}
-  return
-}
+@(private)
+INTERRUPT_COMMANDS := [?]Command{ load_reg(.pc), alu(.DEC), clock, push, push, {.handle_interrupt, {}} }
 
 @(private)
 opcode_table_v2 := [?]Op_Encoding_V2{
   // Block 0
-  {"nop", B("00000000"), {}, {1, 1}}, // 1clocks
+  {"nop", B("00000000"), {{.nop, {}}}, {1, 1}}, // 1clocks
   
   {"ld %v, word %v",   B("00w_0001"), {next, next, store_reg(.r16)}, {3, 3}}, // 3clocks
   {"ld [%v], a",       B("00m_0010"), {load_reg(.r16mem), stash, load_reg(.a), write_mem}, {2, 2}}, // 2clocks
@@ -211,7 +128,7 @@ opcode_table_v2 := [?]Op_Encoding_V2{
   {"ld sp, hl",            B("11111001"), {load_reg(.hl), store_reg(.sp), clock}, {2, 2}}, // 2clocks
 
   {"di", B("11110011"), {clear_i}, {1, 1}}, // 1clocks
-  {"di", B("11111011"), {set_i}, {1, 1}}, // 1clocks
+  {"ei", B("11111011"), {set_i},   {1, 1}}, // 1clocks
 }
 
 @(private)
@@ -228,4 +145,90 @@ opcode_table_prefixed_v2 := [?]Op_Encoding_V2{ // +1 clocks
   {"bit %v, %v,", B("01i__r__"), {load_reg(.r8), alu(.BIT)}, {1, 3}}, // 1-3clocks
   {"res %v, %v,", B("10i__r__"), {load_reg(.r8), alu(.RES), store_reg(.r8)}, {2, 4}}, // 1-3clocks
   {"set %v, %v,", B("11i__r__"), {load_reg(.r8), alu(.SET), store_reg(.r8)}, {2, 4}}, // 1-3clocks
+}
+
+B :: proc(bit_pattern: string) -> (result: Opcode) {
+  assert(len(bit_pattern) == 8)
+  
+  params_found := -1
+  nil_param: Op_Param
+  edit_param: ^Op_Param = &nil_param
+  
+  for char, i in bit_pattern {
+    result.mask  <<= 1
+    result.value <<= 1
+    result.params[0].mask <<= 1
+    result.params[1].mask <<= 1
+    switch char {
+    case '1':
+      result.value |= 1
+      result.mask  |= 1
+      
+      edit_param.r_offset = 8 - u8(i)
+      edit_param = &nil_param
+      
+    case '0':
+      result.mask  |= 1
+      
+      edit_param.r_offset = 8 - u8(i)
+      edit_param = &nil_param
+      
+    case 'r', 'w', 'k', 'm', 'c', 'i', 't', 'd', 's':
+      edit_param.r_offset = 8 - u8(i)
+      
+      params_found += 1
+      edit_param = &result.params[params_found]
+      edit_param.type = Op_Param_Type(char)
+      edit_param.mask     |= 1
+      
+    case '_':
+      edit_param.mask |= 1
+      
+    case:
+      panic(fmt.aprintf("Undesired character in a bit pattern - %v. Full string: %v\n", char, bit_pattern))
+    }
+  }
+  return
+}
+
+next      :: Command{type = .next}
+stash     :: Command{type = .stash}
+unstash   :: Command{type = .unstash}
+inc_stash :: Command{type = .inc_stash}
+check_condition :: Command{type = .check_condition}
+stop    :: Command{type = .stop}
+halt    :: Command{type = .halt}
+illegal :: Command{type = .illegal}
+clock   :: Command{type = .clock}
+push    :: Command{type = .push}
+pop     :: Command{type = .pop}
+set_i   :: Command{type = .set_i}
+clear_i :: Command{type = .clear_i}
+rst     :: Command{type = .rst}
+prefix  :: Command{type = .prefix}
+set_msb :: Command{type = .set_msb}
+
+write_mem :: Command{type = .write}
+read_mem  :: Command{type = .read}
+
+store_reg :: proc(param: Op_Param_Type) -> (cmd: Command) {
+  cmd.type = .store
+  cmd.data = Register_Action{param}
+  return
+}
+load_reg :: proc(param: Op_Param_Type) -> (cmd: Command) {
+  cmd.type = .load
+  cmd.data = Register_Action{param}
+  return
+}
+alu :: proc(function: Alu_Function, set_flags := true) -> (cmd: Command) {
+  cmd.type = .alu
+  cmd.data = Alu_Action{function, false, set_flags}
+  return
+}
+
+alu2 :: proc(function: Alu_Function, set_flags := true) -> (cmd: Command) {
+  cmd.type = .alu
+  cmd.data = Alu_Action{function, true, set_flags}
+  return
 }

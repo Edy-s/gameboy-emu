@@ -7,7 +7,7 @@ Op_Param_Type :: enum u16 {
 }
 
 Command_Type :: enum {
-  illegal,
+  illegal, nop,
   
   next,
   load, store,
@@ -21,7 +21,7 @@ Command_Type :: enum {
   rst,
   
   set_msb,
-  clock, prefix,
+  clock, prefix, handle_interrupt,
 }
 
 Command :: struct {

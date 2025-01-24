@@ -23,6 +23,7 @@ decode_next :: proc(prefixed: bool) -> (result: Opcode, commands: []Command) {
       }
       
       commands = encoding.commands[:]
+      assert(len(commands) != 0)
       
       break
     }
@@ -34,6 +35,7 @@ decode_next :: proc(prefixed: bool) -> (result: Opcode, commands: []Command) {
     print("No instruction found!!! Byte of note: %8b / %2x, at %x\n", instruction_byte, instruction_byte, regs.word[.PC])
     panic("We should always find an instruction.")
   }
+  
   
   return result, commands
 }

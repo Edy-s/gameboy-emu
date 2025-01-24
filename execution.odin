@@ -137,16 +137,48 @@ exec_command :: proc(command: Command, opcode: Opcode) -> (cycles_used: int, val
     valid = true
 
   case .set_i:
-    // todo: flip this flag on next cycle
-    interrupt_master_flag = 1
+    interrupt_enable_requested = true
     valid = true    
   case .clear_i:
-    // todo: flip this flag on next cycle
-    interrupt_master_flag = 0
+    interrupt_master_flag = false
     valid = true
   
   case .clock:
     cycles_used += 1
+    valid = true
+  
+  case .nop:
+    valid = true
+  
+  case .handle_interrupt:
+    i_flags := get_byte_as_flags(rg.Interrupt_Flags, rg.INTERRUPT_FLAGS)
+    target_address :u16= 0x0040
+    for flag in rg.Interrupt_Flag_Type {
+      if flag in i_flags {
+        i_flags^ &= ~{flag}
+        break
+      }
+      target_address += 0x8
+    }
+    // switch {
+    // case .VBlank in i_flags:
+    //   target_address = 0x0040
+    //   i_flags &= ~{.VBlank}
+    // case .LCD in i_flags:
+    //   target_address = 0x0048
+    //   i_flags &= ~{.LCD}
+    // case .Timer in i_flags:
+    //   target_address = 0x0050
+    //   i_flags &= ~{.Timer}
+    // case .Serial in i_flags:
+    //   target_address = 0x0058
+    //   i_flags &= ~{.Serial}
+    // case .Joypad in i_flags:
+    //   target_address = 0x0060
+    //   i_flags &= ~{.Joypad}
+    // }
+    regs.word[.PC] = target_address
+    
     valid = true
   
   case .set_msb:
@@ -170,10 +202,6 @@ exec_command :: proc(command: Command, opcode: Opcode) -> (cycles_used: int, val
   case .inc_stash:
     instr_state.info.stash += 1
     valid = true
-  }
-  
-  if !valid {
-    print("Unimplemented command!\n%v\nopcode params: %v\ninfo: %v; data %4x\n", get_command(), opcode.params, instr_state.info, instr_state.info.data.word)
   }
   
   assert(cycles_used < 2)
@@ -274,3 +302,4 @@ clear_flag :: proc(flag: Cpu_Flags) {
   flags^ &= ~{flag}
 }
 
+import rg "memory_regions"

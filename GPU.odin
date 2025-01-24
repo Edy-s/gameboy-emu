@@ -12,8 +12,10 @@ gpu_state : struct {
 LCD_WIDTH ::  160
 LCD_HEIGHT :: 144
 
+RENDER_MULTIPLE :: 4
+
 init_GPU :: proc() {
-  rl.InitWindow(LCD_WIDTH, LCD_HEIGHT, "emulator")
+  rl.InitWindow(LCD_WIDTH * RENDER_MULTIPLE, LCD_HEIGHT * RENDER_MULTIPLE, "emulator")
   rl.SetTargetFPS(60)
   target_image   = rl.GenImageColor(LCD_WIDTH, LCD_HEIGHT, rl.WHITE)
   target_texture = rl.LoadTextureFromImage(target_image)
@@ -35,15 +37,12 @@ fetcher_x: u8
 video_ram := raw_memory_map[rg.VIDEO_RAM_START : rg.VIDEO_RAM_END]
 
 do_GPU_tick :: proc() -> (success: bool) {
-  lcd_control = transmute(rg.LCD_Control_Byte)raw_memory_map[rg.LCD_CONTROL]
   current_line := raw_memory_map[rg.LCD_Y_COORD]
   
   switch gpu_state.mode {
   case .OAM_SCAN:
     if gpu_state.dot_index % 2 == 0 && gpu_state.object_count < 10 {
       obj := objects[gpu_state.dot_index % 2]
-      
-      // if .obj_enable not_in lcd_control { break }
       
       obj_height :u8= (.obj_size in lcd_control) ? 16 : 8
       
@@ -93,13 +92,20 @@ do_GPU_tick :: proc() -> (success: bool) {
     rl.ClearBackground(rl.PINK)
     for px_line, y in gpu_state.pixels {
       for px, x in px_line {
-        col := rl.Color{px * 60, px * 60, px * 60, 255}
+        base := 50 + px * 40
+        col := rl.Color{base, base, base, 255}
         rl.ImageDrawPixel(&target_image, auto_cast x, auto_cast y, col)
       }
     }
     rl.UpdateTexture(target_texture, target_image.data)
-    rl.DrawTexture(target_texture, 0, 0, rl.WHITE)
+    rl.DrawTextureEx(target_texture, {0, 0}, 0, RENDER_MULTIPLE, rl.WHITE)
     rl.EndDrawing()
+    
+    ie_flags := get_byte_as_flags(rg.Interrupt_Flags, rg.INTERRUPT_TOGGLES)
+    if .VBlank in ie_flags {
+      // i_flags := get_byte_as_flags(rg.Interrupt_Flags, rg.INTERRUPT_FLAGS)
+      // i_flags^ += {.VBlank}
+    }
     
     gpu_state.mode = .V_BLANK
     fallthrough
@@ -173,9 +179,9 @@ gpu_vars : struct {
   OAM_DMA: ^u8,
 }
 
-lcd_control: rg.LCD_Control_Byte
+lcd_control: ^rg.LCD_Control_Byte = get_byte_as_flags(rg.LCD_Control_Byte, rg.LCD_CONTROL)
 
 
-import rg "memory_regions"
 import "core:mem"
 import rl "vendor:raylib"
+import rg "memory_regions"
