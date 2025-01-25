@@ -58,12 +58,19 @@ do_CPU_tick :: proc() -> (valid: bool) {
   conditioned := false
   tick_done := false
   for !tick_done && valid {
+    if instr_state != {} && !instr_state.printed && get_command().type != .next {
+      instr_state.printed = true
+      log_instr()
+    }
+    
     if instr_state == {} {
+      instr_state.op_location = regs.word[.PC]
       instr_state.op, command_buffer = decode_next(false)
       
       // handle interrupts here
-      if interrupt_master_flag && raw_memory_map[rg.INTERRUPT_FLAGS] != 0 {
+      if interrupt_master_flag && (raw_memory_map[rg.INTERRUPT_FLAGS] & raw_memory_map[rg.INTERRUPT_TOGGLES]) != 0 {
         instr_state = {}
+        interrupt_enable_requested = false
         interrupt_master_flag = false
         command_buffer = INTERRUPT_COMMANDS[:]
       }
@@ -90,6 +97,8 @@ do_CPU_tick :: proc() -> (valid: bool) {
       }
       if command_cycles == 1 { tick_done = true }
     }
+    
+    
     
     if tick_done { instr_state.cycles += 1 }
     
@@ -121,9 +130,11 @@ do_CPU_tick :: proc() -> (valid: bool) {
 
 instr_state : struct {
   op: Opcode,
+  op_location: u16,
   cycles: int,
   
   halted: bool,
+  printed: bool,
   
   info: struct {
     bytes_set: u8,

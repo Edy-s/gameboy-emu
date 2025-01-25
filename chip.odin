@@ -92,9 +92,11 @@ write_at :: proc(address: u16, data: u8) {
   memory_map[address] = data
 }
 
+import intr "base:intrinsics"
 read_at :: proc(address: u16) -> u8 {
   if oam_dma.active && oam_dma.index != 0 && !(address >= 0xFF80 && address <= 0xFFFE) {
-    panic("Read outside of HRAM during OAM DMA.")
+    // intr.debug_trap()
+    // panic("Read outside of HRAM during OAM DMA.")
   }
   
   if address == 0xFF40 { 

@@ -151,9 +151,11 @@ exec_command :: proc(command: Command, opcode: Opcode) -> (cycles_used: int, val
   
   case .handle_interrupt:
     i_flags := get_byte_as_flags(rg.Interrupt_Flags, rg.INTERRUPT_FLAGS)
+    i_enable_flags := get_byte_as_flags(rg.Interrupt_Flags, rg.INTERRUPT_TOGGLES)
+    assert(i_flags^ & i_enable_flags^ != {})
     target_address :u16= 0x0040
     for flag in rg.Interrupt_Flag_Type {
-      if flag in i_flags {
+      if flag in i_flags^ && flag in i_enable_flags^ {
         i_flags^ &= ~{flag}
         break
       }

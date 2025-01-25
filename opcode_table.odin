@@ -30,10 +30,10 @@ opcode_table_v2 := [?]Op_Encoding_V2{
   // Block 0
   {"nop", B("00000000"), {{.nop, {}}}, {1, 1}}, // 1clocks
   
-  {"ld %v, word %v",   B("00w_0001"), {next, next, store_reg(.r16)}, {3, 3}}, // 3clocks
-  {"ld [%v], a",       B("00m_0010"), {load_reg(.r16mem), stash, load_reg(.a), write_mem}, {2, 2}}, // 2clocks
-  {"ld a, [%v]",       B("00m_1010"), {load_reg(.r16mem), stash, read_mem, store_reg(.a)}, {2, 2}}, // 2clocks
-  {"ld [word %v], sp", B("00001000"), {next, next, stash, load_reg(.spl), write_mem, inc_stash, load_reg(.sph), write_mem}, {5, 5}}, // 5clocks
+  {"ld %v, word %4x",   B("00w_0001"), {next, next, store_reg(.r16)}, {3, 3}}, // 3clocks
+  {"ld [%v], a",        B("00m_0010"), {load_reg(.r16mem), stash, load_reg(.a), write_mem}, {2, 2}}, // 2clocks
+  {"ld a, [%v]",        B("00m_1010"), {load_reg(.r16mem), stash, read_mem, store_reg(.a)}, {2, 2}}, // 2clocks
+  {"ld [word %4x], sp", B("00001000"), {next, next, stash, load_reg(.spl), write_mem, inc_stash, load_reg(.sph), write_mem}, {5, 5}}, // 5clocks
   
   {"inc %v",     B("00w_0011"), {load_reg(.r16), alu(.INC), store_reg(.r16)}, {2, 2}}, // 2clocks
   {"dec %v",     B("00w_1011"), {load_reg(.r16), alu(.DEC), store_reg(.r16)}, {2, 2}}, // 2clocks
@@ -42,7 +42,7 @@ opcode_table_v2 := [?]Op_Encoding_V2{
   {"inc %v", B("00r__100"), {load_reg(.r8), alu(.INC), store_reg(.r8)}, {1, 3}}, // 1-3clocks
   {"dec %v", B("00r__101"), {load_reg(.r8), alu(.DEC), store_reg(.r8)}, {1, 3}}, // 1-3clocks
   
-  {"ld %v", B("00r__110"), {next, store_reg(.r8)}, {2, 3}}, // 2clocks
+  {"ld byte %2x", B("00r__110"), {next, store_reg(.r8)}, {2, 3}}, // 2clocks
   
   {"rlca", B("00000111"), {load_reg(.a), alu(.RLC, set_flags = false), store_reg(.a)}, {1, 1}}, // 1clocks
   {"rrca", B("00001111"), {load_reg(.a), alu(.RRC, set_flags = false), store_reg(.a)}, {1, 1}}, // 1clocks
@@ -54,8 +54,8 @@ opcode_table_v2 := [?]Op_Encoding_V2{
   {"scf", B("00110111"), {alu(.SCF)}, {1, 1}}, // 1clocks
   {"ccf", B("00111111"), {alu(.CCF)}, {1, 1}}, // 1clocks
   
-  {"jr %i",      B("00011000"), {next, stash,                  load_reg(.pc), alu2(.SIGNED_ADD, set_flags = false), store_reg(.pc)}, {3, 3}}, // 3clocks 
-  {"jr %v, $%i", B("001c_000"), {next, stash, check_condition, load_reg(.pc), alu2(.SIGNED_ADD, set_flags = false), store_reg(.pc)}, {2, 3}}, // 2-3clocks
+  {"jr ~%2x",      B("00011000"), {next, stash,                  load_reg(.pc), alu2(.SIGNED_ADD, set_flags = false), store_reg(.pc)}, {3, 3}}, // 3clocks 
+  {"jr %v, ~%2x", B("001c_000"), {next, stash, check_condition, load_reg(.pc), alu2(.SIGNED_ADD, set_flags = false), store_reg(.pc)}, {2, 3}}, // 2-3clocks
   
   {"stop", B("00010000"), {stop}, {0, 0}},
   
@@ -88,25 +88,25 @@ opcode_table_v2 := [?]Op_Encoding_V2{
   {"xxx", B("11111100"), {illegal}, {1, 1}}, // 1clocks
   {"xxx", B("11111101"), {illegal}, {1, 1}}, // 1clocks
   
-  {"add a, byte %i", B("11000110"), {next, stash, load_reg(.a), alu2(.ADD), store_reg(.a)}, {2, 2}}, // 2clocks
-  {"adc a, byte %i", B("11001110"), {next, stash, load_reg(.a), alu2(.ADC), store_reg(.a)}, {2, 2}}, // 2clocks
-  {"sub a, byte %i", B("11010110"), {next, stash, load_reg(.a), alu2(.SUB), store_reg(.a)}, {2, 2}}, // 2clocks
-  {"sbc a, byte %i", B("11011110"), {next, stash, load_reg(.a), alu2(.SBC), store_reg(.a)}, {2, 2}}, // 2clocks
-  {"and a, byte %i", B("11100110"), {next, stash, load_reg(.a), alu2(.AND), store_reg(.a)}, {2, 2}}, // 2clocks
-  {"xor a, byte %i", B("11101110"), {next, stash, load_reg(.a), alu2(.XOR), store_reg(.a)}, {2, 2}}, // 2clocks
-  {"or  a, byte %i", B("11110110"), {next, stash, load_reg(.a), alu2(.OR),  store_reg(.a)}, {2, 2}}, // 2clocks
-  {"cp  a, byte %i", B("11111110"), {next, stash, load_reg(.a), alu2(.CP),  store_reg(.a)}, {2, 2}}, // 2clocks
+  {"add a, byte %2x", B("11000110"), {next, stash, load_reg(.a), alu2(.ADD), store_reg(.a)}, {2, 2}}, // 2clocks
+  {"adc a, byte %2x", B("11001110"), {next, stash, load_reg(.a), alu2(.ADC), store_reg(.a)}, {2, 2}}, // 2clocks
+  {"sub a, byte %2x", B("11010110"), {next, stash, load_reg(.a), alu2(.SUB), store_reg(.a)}, {2, 2}}, // 2clocks
+  {"sbc a, byte %2x", B("11011110"), {next, stash, load_reg(.a), alu2(.SBC), store_reg(.a)}, {2, 2}}, // 2clocks
+  {"and a, byte %2x", B("11100110"), {next, stash, load_reg(.a), alu2(.AND), store_reg(.a)}, {2, 2}}, // 2clocks
+  {"xor a, byte %2x", B("11101110"), {next, stash, load_reg(.a), alu2(.XOR), store_reg(.a)}, {2, 2}}, // 2clocks
+  {"or  a, byte %2x", B("11110110"), {next, stash, load_reg(.a), alu2(.OR),  store_reg(.a)}, {2, 2}}, // 2clocks
+  {"cp  a, byte %2x", B("11111110"), {next, stash, load_reg(.a), alu2(.CP),  store_reg(.a)}, {2, 2}}, // 2clocks
   
   {"ret %v", B("110c_000"), {clock, check_condition, clock, pop, pop, store_reg(.pc)}, {2, 5}}, // 2-5clocks
   {"ret",    B("11001001"), {clock, pop, pop, store_reg(.pc)}, {4, 4}}, // 4clocks
   {"reti",   B("11011001"), {clock, pop, pop, store_reg(.pc), set_i}, {4, 4}}, // 4clocks
   
-  {"jp %v, word %v", B("110c_010"), {next, next, check_condition, store_reg(.pc)}, {3, 4}}, // 3-4clocks
-  {"jp word %v",     B("11000011"), {next, next, store_reg(.pc), clock}, {4, 4}}, // 4clocks
-  {"jp hl",          B("11101001"), {load_reg(.hl), store_reg(.pc)}, {1, 1}}, // 1clocks
+  {"jp %v, word %4x", B("110c_010"), {next, next, check_condition, store_reg(.pc)}, {3, 4}}, // 3-4clocks
+  {"jp word %4x",     B("11000011"), {next, next, store_reg(.pc), clock}, {4, 4}}, // 4clocks
+  {"jp hl",           B("11101001"), {load_reg(.hl), store_reg(.pc)}, {1, 1}}, // 1clocks
   
-  {"call %v, word $%v", B("110c_100"), {next, next, stash, check_condition, load_reg(.pc), clock, push, push, unstash, store_reg(.pc)}, {3, 6}}, // 3-6clocks
-  {"call word $%v",     B("11001101"), {next, next, stash,                  load_reg(.pc), clock, push, push, unstash, store_reg(.pc)}, {6, 6}}, // 6clocks
+  {"call %v, word $%4x", B("110c_100"), {next, next, stash, check_condition, load_reg(.pc), clock, push, push, unstash, store_reg(.pc)}, {3, 6}}, // 3-6clocks
+  {"call word $%4x",     B("11001101"), {next, next, stash,                  load_reg(.pc), clock, push, push, unstash, store_reg(.pc)}, {6, 6}}, // 6clocks
   
   {"rst %2x", B("11t__111"), {load_reg(.pc), push, push, rst}, {4, 4}}, // 4clocks
   
@@ -115,17 +115,17 @@ opcode_table_v2 := [?]Op_Encoding_V2{
   
   {"", B("11001011"), {prefix}, {1, 1}}, // 1clocks
   
-  {"ldh [c],  a",      B("11100010"), {load_reg(.c), set_msb, stash, load_reg(.a), write_mem}, {2, 2}}, // 2clocks
-  {"ldh [byte %v], a", B("11100000"), {next,         set_msb, stash, load_reg(.a), write_mem}, {3, 3}}, // 3clocks
-  {"ld [word %v], a",  B("11101010"), {next,         next,    stash, load_reg(.a), write_mem}, {4, 4}}, // 4clocks
-  {"ldh a, [c]",       B("11110010"), {load_reg(.c), set_msb, stash, read_mem, store_reg(.a)}, {2, 2}}, // 2clocks
-  {"ldh a, [byte %v]", B("11110000"), {next,         set_msb, stash, read_mem, store_reg(.a)}, {3, 3}}, // 3clocks
-  {"ld a, [word %v]",  B("11111010"), {next,         next,    stash, read_mem, store_reg(.a)}, {4, 4}}, // 4clocks
+  {"ldh [c],  a",       B("11100010"), {load_reg(.c), set_msb, stash, load_reg(.a), write_mem}, {2, 2}}, // 2clocks
+  {"ldh [byte %2x], a", B("11100000"), {next,         set_msb, stash, load_reg(.a), write_mem}, {3, 3}}, // 3clocks
+  {"ld [word %4x], a",  B("11101010"), {next,         next,    stash, load_reg(.a), write_mem}, {4, 4}}, // 4clocks
+  {"ldh a, [c]",        B("11110010"), {load_reg(.c), set_msb, stash, read_mem, store_reg(.a)}, {2, 2}}, // 2clocks
+  {"ldh a, [byte %2x]", B("11110000"), {next,         set_msb, stash, read_mem, store_reg(.a)}, {3, 3}}, // 3clocks
+  {"ld a, [word %4x]",  B("11111010"), {next,         next,    stash, read_mem, store_reg(.a)}, {4, 4}}, // 4clocks
   
   
-  {"add sp, byte %v",      B("11101000"), {next, stash, load_reg(.sp), alu2(.SIGNED_ADD), clock, store_reg(.sp)}, {4, 4}}, // 4clocks
-  {"ld hl, sp + byte %v",  B("11111000"), {next, stash, load_reg(.sp), alu2(.SIGNED_ADD), store_reg(.hl)}, {3, 3}}, // 3clocks
-  {"ld sp, hl",            B("11111001"), {load_reg(.hl), store_reg(.sp), clock}, {2, 2}}, // 2clocks
+  {"add sp, byte %v",       B("11101000"), {next, stash, load_reg(.sp), alu2(.SIGNED_ADD), clock, store_reg(.sp)}, {4, 4}}, // 4clocks
+  {"ld hl, sp + byte %2x",  B("11111000"), {next, stash, load_reg(.sp), alu2(.SIGNED_ADD), store_reg(.hl)}, {3, 3}}, // 3clocks
+  {"ld sp, hl",             B("11111001"), {load_reg(.hl), store_reg(.sp), clock}, {2, 2}}, // 2clocks
 
   {"di", B("11110011"), {clear_i}, {1, 1}}, // 1clocks
   {"ei", B("11111011"), {set_i},   {1, 1}}, // 1clocks

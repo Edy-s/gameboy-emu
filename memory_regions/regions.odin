@@ -1,5 +1,7 @@
 package memory_regions
 
+INPUT :: 0xFF00
+
 // Timer
 TIMER_DIV     :: 0xFF04
 TIMER_COUNT   :: 0xFF05

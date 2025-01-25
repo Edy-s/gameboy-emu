@@ -6,9 +6,68 @@ import "core:os"
 gb_doc_log: strings.Builder
 log_line: int
 
+do_logging: bool
+
 init_log :: proc() {
   gb_doc_log := strings.builder_make()
 }
+
+log_instr :: proc() {
+  instr_state.printed = true
+  if !do_logging { return }
+  bingus :: union{Reg_Byte, Reg_Word, string, u8, u16}
+  printout: [2]bingus
+  to_print: u8
+  for i in 0..<2 {
+    tp  := instr_state.op.params[i].type
+    val := instr_state.op.params[i].value
+    #partial switch tp {
+    case .r8, .d8, .s8:
+      r8, mem_hl := r8_mapping(val)
+      if mem_hl {
+        printout[to_print] = "[HL]"
+      } else {
+        printout[to_print] = r8
+      }
+    case .cond:
+      switch val {
+      case 0: printout[to_print] = "NZ"
+      case 1: printout[to_print] = "Z"
+      case 2: printout[to_print] = "NC"
+      case 3: printout[to_print] = "C"
+    }
+    case .r16:
+      r16 := r16_mapping[val]
+      printout[to_print] = r16
+    case .r16stk:
+      r16stk := r16stk_mapping[val]
+      printout[to_print] = r16stk
+    case .r16mem:
+      r16mem, change := r16mem_mapping(val)
+      if      val == 2 { printout[to_print] = "HL+" }
+      else if val == 3 { printout[to_print] = "HL-" }
+      else { printout[to_print] = r16mem }
+    }
+    if printout[to_print] != nil { to_print += 1 }
+  }
+  
+  if instr_state.info.bytes_set == 1 {
+    printout[to_print] = instr_state.info.data.bytes.lsb
+    to_print += 1
+  }
+  if instr_state.info.bytes_set == 2 {
+    printout[to_print] = instr_state.info.data.word
+    to_print += 1
+  }
+  
+  assert(to_print <= 2)
+  print("%4x ", instr_state.op_location)
+  if to_print == 0 { print(instr_state.op.opcode_string) }
+  if to_print == 1 { print(instr_state.op.opcode_string, printout[0]) }
+  if to_print == 2 { print(instr_state.op.opcode_string, printout[0], printout[1]) }
+  print("\n")
+}
+
 
 log_for_doc :: proc() {
   if len(os.args) != 3 { return }

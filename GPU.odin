@@ -3,6 +3,7 @@ package main
 gpu_state : struct {
   mode: enum {OAM_SCAN, PRE_DRAW, DRAWING, H_BLANK, RENDER, V_BLANK},
   dot_index: int,
+  frame_dot_index: int,
   
   palettes: struct {
     bg, obj0, obj1: u8
@@ -114,11 +115,12 @@ do_GPU_tick :: proc() -> (success: bool) {
     rl.DrawTextureEx(target_texture, {0, 0}, 0, RENDER_MULTIPLE, rl.WHITE)
     rl.EndDrawing()
     
-    ie_flags := get_byte_as_flags(rg.Interrupt_Flags, rg.INTERRUPT_TOGGLES)
-    if .VBlank in ie_flags {
-      i_flags := get_byte_as_flags(rg.Interrupt_Flags, rg.INTERRUPT_FLAGS)
-      i_flags^ += {.VBlank}
+    if rl.IsKeyPressed(.L) {
+      do_logging = !do_logging
     }
+    
+    i_flags := get_byte_as_flags(rg.Interrupt_Flags, rg.INTERRUPT_FLAGS)
+    i_flags^ += {.VBlank}
     
     gpu_state.mode = .V_BLANK
     fallthrough
@@ -129,6 +131,7 @@ do_GPU_tick :: proc() -> (success: bool) {
       gpu_state.dot_index = -1
     }
     if current_line > 153 {
+      if .LCD_enable not_in lcd_control { break }
       current_line = 0
       gpu_state = {}
       gpu_state.dot_index = -1
@@ -168,6 +171,7 @@ do_GPU_tick :: proc() -> (success: bool) {
   }
   
   gpu_state.dot_index += 1
+  gpu_state.frame_dot_index += 1
   return true
 }
 
