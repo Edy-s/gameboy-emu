@@ -100,8 +100,7 @@ exec_command :: proc(command: Command, opcode: Opcode) -> (cycles_used: int, val
   case .read, .write:
     address := get_stash_word()
     if command.type == .read {
-      if address == 0xFF44 { put_byte_to_info(0x90) } // todo: remove when gpu is in place hardcode because no gpu
-      else                 { put_byte_to_info(read_at(address)) }
+      put_byte_to_info(read_at(address))
     }
     else if command.type == .write { write_at(address, get_info_byte()) }
     
@@ -160,23 +159,11 @@ exec_command :: proc(command: Command, opcode: Opcode) -> (cycles_used: int, val
       }
       target_address += 0x8
     }
-    // switch {
-    // case .VBlank in i_flags:
-    //   target_address = 0x0040
-    //   i_flags &= ~{.VBlank}
-    // case .LCD in i_flags:
-    //   target_address = 0x0048
-    //   i_flags &= ~{.LCD}
-    // case .Timer in i_flags:
-    //   target_address = 0x0050
-    //   i_flags &= ~{.Timer}
-    // case .Serial in i_flags:
-    //   target_address = 0x0058
-    //   i_flags &= ~{.Serial}
-    // case .Joypad in i_flags:
-    //   target_address = 0x0060
-    //   i_flags &= ~{.Joypad}
-    // }
+    // .VBlank = 0x0040
+    // .LCD    = 0x0048
+    // .Timer  = 0x0050
+    // .Serial = 0x0058
+    // .Joypad = 0x0060
     regs.word[.PC] = target_address
     
     valid = true

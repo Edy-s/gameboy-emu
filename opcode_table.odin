@@ -142,7 +142,7 @@ opcode_table_prefixed_v2 := [?]Op_Encoding_V2{ // +1 clocks
   {"srl %v",  B("00111r__"), {load_reg(.r8), alu(.SRL),  store_reg(.r8)}, {2, 4}}, // 1-3clocks
   {"swap %v", B("00110r__"), {load_reg(.r8), alu(.SWAP), store_reg(.r8)}, {2, 4}}, // 1-3clocks
   
-  {"bit %v, %v,", B("01i__r__"), {load_reg(.r8), alu(.BIT)}, {1, 3}}, // 1-3clocks
+  {"bit %v, %v,", B("01i__r__"), {load_reg(.r8), alu(.BIT)}, {2, 3}}, // 1-3clocks
   {"res %v, %v,", B("10i__r__"), {load_reg(.r8), alu(.RES), store_reg(.r8)}, {2, 4}}, // 1-3clocks
   {"set %v, %v,", B("11i__r__"), {load_reg(.r8), alu(.SET), store_reg(.r8)}, {2, 4}}, // 1-3clocks
 }

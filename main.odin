@@ -53,7 +53,7 @@ main :: proc() {
       execution_cutoff += RUN_GAPS
     }*/
     
-    if read_at(0xFF02) & 0x80 != 0 {
+    if !oam_dma.active && read_at(0xFF02) & 0x80 != 0 {
       print("%c", read_at(0xFF01))
       append(&serial_data, read_at(0xFF01))
       

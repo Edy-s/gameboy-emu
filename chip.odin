@@ -75,22 +75,32 @@ write_at :: proc(address: u16, data: u8) {
     oam_dma.source_msb = data
     oam_dma.index = 0
     return
-  case rg.TIMER_COUNT:
-    data = data
     
   case rg.TIMER_DIV:
     data = 0
+  
+  case rg.LCD_STATUS:
+    // Low 3 bits are read only.
+    data &= ~u8(0b111)
+  }
+  
+  if address == 0xFF40 { 
+    xd := 123
+    xd += 1
   }
   
   memory_map[address] = data
 }
 
 read_at :: proc(address: u16) -> u8 {
-  if oam_dma.active && !(address >= 0xFF80 && address <= 0xFFE) {
+  if oam_dma.active && oam_dma.index != 0 && !(address >= 0xFF80 && address <= 0xFFFE) {
     panic("Read outside of HRAM during OAM DMA.")
   }
   
-  // if address == 0xFF44 { return 0x90 }
+  if address == 0xFF40 { 
+    data := 123
+    data += 1
+  }
   return memory_map[address]
 }
 
@@ -102,7 +112,7 @@ get_byte_as_flags :: proc($T: typeid, address: u16) -> ^T {
 //   memory_map[address] = transmute(u8)flags
 // }
 
-@(private="file")
+// @(private="file")
 oam_dma: struct {
   active: bool,
   source_msb: u8,

@@ -1,5 +1,6 @@
 package memory_regions
 
+// Timer
 TIMER_DIV     :: 0xFF04
 TIMER_COUNT   :: 0xFF05
 TIMER_MODULO  :: 0xFF06
@@ -13,6 +14,7 @@ OAM_START :: 0xFE00
 OAM_END   :: 0xFE9F
 OAM_DMA_REGISTER :: 0xFF46
 
+// Interrupt
 INTERRUPT_TOGGLES :: 0xFFFF
 INTERRUPT_FLAGS   :: 0xFF0F
 Interrupt_Flag_Type :: enum {
@@ -24,7 +26,7 @@ Interrupt_Flag_Type :: enum {
 }
 Interrupt_Flags :: bit_set[Interrupt_Flag_Type; u8]
 
-
+// Rendering
 LCD_CONTROL      :: 0xFF40
 LCD_Control_Byte :: bit_set[enum {
   bg_priority,
@@ -38,17 +40,27 @@ LCD_Control_Byte :: bit_set[enum {
 }; u8]
 
 LCD_STATUS  :: 0xFF41
+LCD_Status :: bit_field u8 {
+  PPU_mode: u8    | 2,
+  ly_eq_lyc: bool | 1,
+  mode_0: bool    | 1,
+  mode_1: bool    | 1,
+  mode_2: bool    | 1,
+  lyc_on: bool    | 1,
+}
 LCD_Y_COORD :: 0xFF44
 LCD_Y_COORD_COMPARE :: 0xFF45
 
 VIDEO_RAM_START :: 0x8000
 VIDEO_RAM_END   :: 0x9FFF
 
-// TILE_DATA_OFFSET :: 0x0000
-TILE_MAP_OFFSET :: 0x1800
+BG_PALETTE    :: 0xFF47
+OBJ_0_PALETTE :: 0xFF48
+OBJ_1_PALETTE :: 0xFF49
 
-TILE_DATA  :: 0x8000
-BG_TILEMAP :: 0x9800
+TILE_MAP_OFFSET :: 0x1800
+// TILE_DATA  :: 0x8000
+// BG_TILEMAP :: 0x9800
 
 BACKGROUND_X :: 0xFF43
 BACKGROUND_Y :: 0xFF42
