@@ -21,6 +21,8 @@ init_memory :: proc() -> bool {
   assert(len(file[:])-1 == 0x7FFF)
   copy(memory_map[0x0000:0x7FFF], file[:])
   
+  raw_memory_map[rg.INPUT] = 0xFF
+  
   return true
 }
 
@@ -84,9 +86,9 @@ write_at :: proc(address: u16, data: u8) {
     data &= ~u8(0b111)
   }
   
-  if address == 0xFF40 { 
-    xd := 123
-    xd += 1
+  if address < 0x8000 {
+    // TODO: MBC handling
+    return
   }
   
   memory_map[address] = data
@@ -95,8 +97,8 @@ write_at :: proc(address: u16, data: u8) {
 import intr "base:intrinsics"
 read_at :: proc(address: u16) -> u8 {
   if oam_dma.active && oam_dma.index != 0 && !(address >= 0xFF80 && address <= 0xFFFE) {
-    // intr.debug_trap()
-    // panic("Read outside of HRAM during OAM DMA.")
+    print("Read outside of HRAM during OAM DMA.\n")
+    intr.debug_trap()
   }
   
   if address == 0xFF40 { 

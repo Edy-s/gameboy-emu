@@ -28,6 +28,7 @@ main :: proc() {
   if !ok { return }
   
   log_for_doc()
+  start := rl.GetTime()
   running := true
   for running {
     do_chip_tick()
@@ -44,39 +45,54 @@ main :: proc() {
     if rl.WindowShouldClose() { running = false }
     if number_of_instructions_executed_succesfully > serial_finish { running = false }
     
-    UNSET_INPUT :: u8(0b00_11_1111)
-    input_out := UNSET_INPUT
-    switch {
-    case rl.IsKeyPressed(.Z):
-      input_out &= ~u8(0b1) // A
-      input_out &= ~u8(0b100000)
-    case rl.IsKeyPressed(.X):
-      input_out &= ~u8(0b10) // B
-      input_out &= ~u8(0b100000)
-    case rl.IsKeyPressed(.A):
-      input_out &= ~u8(0b1000) // start
-      input_out &= ~u8(0b100000)
-    case rl.IsKeyPressed(.S):
-      input_out &= ~u8(0b100) // select
-      input_out &= ~u8(0b100000)
-    
-    case rl.IsKeyPressed(.UP):
-      input_out &= ~u8(0b100)
-      input_out &= ~u8(0b10000)
-    case rl.IsKeyPressed(.DOWN):
-      input_out &= ~u8(0b1000)
-      input_out &= ~u8(0b10000)
-    case rl.IsKeyPressed(.LEFT):
-      input_out &= ~u8(0b10)
-      input_out &= ~u8(0b10000)
-    case rl.IsKeyPressed(.RIGHT):
-      input_out &= ~u8(0b1)
-      input_out &= ~u8(0b10000)
+    input := raw_memory_map[rg.INPUT]
+    input |= 0xF
+    debug_shite := 0
+    if (input & 0x20) == 0 { 
+      switch {
+      case rl.IsKeyDown(.Z):
+        input &= ~u8(0b1) // A
+        debug_shite += 1
+        
+      case rl.IsKeyDown(.X):
+        input &= ~u8(0b10) // B
+        debug_shite += 1
+        
+      case rl.IsKeyDown(.A):
+        input &= ~u8(0b1000) // start
+        debug_shite += 1
+        
+      case rl.IsKeyDown(.S):
+        input &= ~u8(0b100) // select
+        debug_shite += 1
+        
+      }
+    } else if (input & 0x10) == 0 {
+      switch {
+      case rl.IsKeyDown(.UP):
+        input &= ~u8(0b100)
+        debug_shite += 1
+        
+      case rl.IsKeyDown(.DOWN):
+        input &= ~u8(0b1000)
+        debug_shite += 1
+        
+      case rl.IsKeyDown(.LEFT):
+        input &= ~u8(0b10)
+        debug_shite += 1
+        
+      case rl.IsKeyDown(.RIGHT):
+        input &= ~u8(0b1)
+        debug_shite += 1
+        
+      }
     }
-    raw_memory_map[rg.INPUT] = input_out
+    raw_memory_map[rg.INPUT] = input
     
-    i_flags := get_byte_as_flags(rg.Interrupt_Flags, rg.INTERRUPT_FLAGS)
-    if input_out != UNSET_INPUT { i_flags^ |= {.Joypad} }
+    if ~(input & 0xF) == 0 {
+      i_flags := get_byte_as_flags(rg.Interrupt_Flags, rg.INTERRUPT_FLAGS)
+      i_flags^ |= {.Joypad}
+    }
     
     
     
@@ -100,6 +116,7 @@ main :: proc() {
     //   write_at(0xFF02, byte & (~u8(0x80)))
     // }
   }
+  print("Cycles/s: %4f\n", f64(cycle_index) / (rl.GetTime() - start))
   if strings.builder_len(gb_doc_log) > 0 { os.write_entire_file("doctor.log", transmute([]u8)strings.to_string(gb_doc_log)) }
   print("Number of instructions executed: %v\n", number_of_instructions_executed_succesfully)
 }

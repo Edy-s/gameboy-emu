@@ -42,7 +42,7 @@ opcode_table_v2 := [?]Op_Encoding_V2{
   {"inc %v", B("00r__100"), {load_reg(.r8), alu(.INC), store_reg(.r8)}, {1, 3}}, // 1-3clocks
   {"dec %v", B("00r__101"), {load_reg(.r8), alu(.DEC), store_reg(.r8)}, {1, 3}}, // 1-3clocks
   
-  {"ld byte %2x", B("00r__110"), {next, store_reg(.r8)}, {2, 3}}, // 2clocks
+  {"ld %v, byte %2x", B("00r__110"), {next, store_reg(.r8)}, {2, 3}}, // 2clocks
   
   {"rlca", B("00000111"), {load_reg(.a), alu(.RLC, set_flags = false), store_reg(.a)}, {1, 1}}, // 1clocks
   {"rrca", B("00001111"), {load_reg(.a), alu(.RRC, set_flags = false), store_reg(.a)}, {1, 1}}, // 1clocks

@@ -24,6 +24,8 @@ init_GPU :: proc() {
   rl.SetTargetFPS(60)
   target_image   = rl.GenImageColor(LCD_WIDTH, LCD_HEIGHT, rl.WHITE)
   target_texture = rl.LoadTextureFromImage(target_image)
+  
+  assert(len(objects) == 40)
 }
 
 target_image:   rl.Image
@@ -38,16 +40,18 @@ do_GPU_tick :: proc() -> (success: bool) {
   switch gpu_state.mode {
   case .OAM_SCAN:
     if gpu_state.dot_index % 2 == 0 && gpu_state.object_count < 10 {
-      obj := objects[gpu_state.dot_index % 2]
-      
-      obj.height = (.obj_size in lcd_control) ? 16 : 8
-      
-      lo_y := obj.pos.y + obj.height
-      hi_y := obj.pos.y
-      
-      if lo_y <= current_line && hi_y > current_line {
-        gpu_state.line_objects[gpu_state.object_count] = obj
-        gpu_state.object_count += 1
+      obj := objects[gpu_state.dot_index / 2]
+      if obj != {} {
+        obj_height :u8= (.obj_size in lcd_control) ? 16 : 8
+        lo_y := obj.pos.y + obj_height
+        hi_y := obj.pos.y
+        
+        test_line := current_line + 16
+        
+        if obj.pos.y != 0 && lo_y >= test_line && test_line > hi_y {
+          gpu_state.line_objects[gpu_state.object_count] = obj
+          gpu_state.object_count += 1
+        }
       }
     }
     if gpu_state.dot_index == 79 { gpu_state.mode = .PRE_DRAW }
@@ -81,7 +85,7 @@ do_GPU_tick :: proc() -> (success: bool) {
       
       final_pixel := obj_pix.color != 0 ? obj_final_col : bg_final_col
       
-      gpu_state.pixels[current_line][pusher_x] = bg_final_col
+      gpu_state.pixels[current_line][pusher_x] = final_pixel
       
     }
     if pusher_x == 160 {
@@ -92,6 +96,7 @@ do_GPU_tick :: proc() -> (success: bool) {
 
   case .H_BLANK:
     if gpu_state.dot_index == 455 {
+      gpu_state.object_count = 0
       current_line += 1
       gpu_state.mode = .OAM_SCAN
       if current_line == 143 {
@@ -218,7 +223,8 @@ get_object_data :: proc(current_line: u8) {
     obj := gpu_state.line_objects[i]
     if obj.pos.x + offset == x_pos {
       tile_index := obj.tile_index
-      if obj.height == 16 { tile_index = (obj.tile_index & ~u8(0b1)) }
+      obj_height := (.obj_size in lcd_control) ? 16 : 8
+      if obj_height == 16 { tile_index = (obj.tile_index & ~u8(0b1)) }
       tile_address := u16(tile_index) * 16
       
       sprite_y := y_pos - obj.pos.y
@@ -252,7 +258,7 @@ get_object_data :: proc(current_line: u8) {
   }
 }
 
-V2 :: struct {x, y: u8}
+V2 :: struct {y, x: u8}
 Object :: struct {
   pos: V2,
   tile_index: u8,
@@ -263,8 +269,7 @@ Object :: struct {
     dmg_palette: bool | 1,
     bank: bool        | 1,
     cbg_palette: u8   | 3
-  },
-  height: u8
+  }
 }
 
 objects := mem.slice_data_cast([]Object, raw_memory_map[rg.OAM_START:rg.OAM_END + 1])
