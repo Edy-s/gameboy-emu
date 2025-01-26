@@ -17,9 +17,9 @@ main :: proc() {
   init_log()
   
   ok := init_memory()
+  if !ok { return }
   init_GPU()
   init_CPU()
-  if !ok { return }
   
   log_for_doc()
   start := rl.GetTime()

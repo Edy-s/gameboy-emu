@@ -3,8 +3,8 @@ Passing tests: (https://github.com/retrio/gb-test-roms)
   mem_timing: all
   instr_timing: all
 
-window rendering
-mbc handling
-sound
+proper memory register mapping
+refactor state so it's not all over the place
 
+sound?
 cgb?

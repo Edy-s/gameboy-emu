@@ -6,6 +6,8 @@ gpu_state : struct {
   frame_dot_index: int,
   skip_frame: bool,
   
+  drawing_window: bool,
+  
   palettes: struct {
     bg, obj0, obj1: u8
   },
@@ -21,7 +23,7 @@ LCD_HEIGHT :: 144
 RENDER_MULTIPLE :: 4
 
 init_GPU :: proc() {
-  name_from_rom := raw_memory_map[0x0134:0x0143]
+  name_from_rom := ROM_header.game_title[:]
   for c, i in name_from_rom {
     if c == 0 {
       name_from_rom = name_from_rom[:i]
@@ -76,7 +78,7 @@ do_GPU_tick :: proc() -> (success: bool) {
       background_FIFO = {}
       object_FIFO = {}
       
-      get_tile_data(current_line)
+      get_tile_data(current_line, gpu_state.drawing_window)
       for _ in 0..<raw_memory_map[rg.BACKGROUND_X] % 8 {
         pop_pixel(&background_FIFO)
       }
@@ -85,8 +87,12 @@ do_GPU_tick :: proc() -> (success: bool) {
     }
     
   case .DRAWING:
+    if !gpu_state.drawing_window && pusher_x >= raw_memory_map[rg.WINDOW_X] + 7 && current_line >= raw_memory_map[rg.WINDOW_Y] {
+      background_FIFO.pixels_left = 0
+      gpu_state.drawing_window = true
+    }
     if background_FIFO.pixels_left == 0 {
-      get_tile_data(current_line)
+      get_tile_data(current_line, gpu_state.drawing_window)
     }
     if pusher_x < 160 && !gpu_state.skip_frame {
       bg_col := pop_pixel(&background_FIFO).color
@@ -99,7 +105,7 @@ do_GPU_tick :: proc() -> (success: bool) {
       bg_final_col := (gpu_state.palettes.bg >> (bg_col * 2)) & 0b11
       
       final_col := bg_final_col
-      if obj_pix.color != 0 && !(obj_pix.under_background && bg_col != 0) {
+      if !gpu_state.drawing_window && obj_pix.color != 0 && !(obj_pix.under_background && bg_col != 0) {
         final_col = obj_final_col
       }
       
@@ -117,6 +123,7 @@ do_GPU_tick :: proc() -> (success: bool) {
       gpu_state.object_count = 0
       current_line += 1
       gpu_state.mode = .OAM_SCAN
+      gpu_state.drawing_window = false
       if current_line == 144 {
         gpu_state.mode = .RENDER
       }
@@ -200,12 +207,24 @@ do_GPU_tick :: proc() -> (success: bool) {
   return true
 }
 
-get_tile_data :: proc(current_line: u8) {
-  cam_x := pusher_x    + raw_memory_map[rg.BACKGROUND_X]
-  cam_y := current_line + raw_memory_map[rg.BACKGROUND_Y]
+get_tile_data :: proc(current_line: u8, window: bool) {
+  offset_x, offset_y: u8
+  tile_map_is_offset: bool
+  if window {
+    offset_x = raw_memory_map[rg.WINDOW_X]
+    offset_y = raw_memory_map[rg.WINDOW_Y]
+    tile_map_is_offset = .window_tile_map_area in lcd_control
+  } else {
+    offset_x = raw_memory_map[rg.BACKGROUND_X]
+    offset_y = raw_memory_map[rg.BACKGROUND_Y]
+    tile_map_is_offset = .bg_tile_map_area in lcd_control
+  }
+  
+  cam_x := pusher_x     + offset_x
+  cam_y := current_line + offset_y
   
   tile_index := u16(cam_x >> 3) | (u16(cam_y >> 3) << 5)
-  if .bg_tile_map_area in lcd_control { tile_index += 0x0400 }
+  if tile_map_is_offset { tile_index += 0x0400 }
   
   tile_address := tile_index | rg.TILE_MAP_OFFSET
   tile_data_index := u16(video_ram[tile_address])
@@ -273,7 +292,6 @@ get_object_data :: proc(current_line: u8) {
         }
       }
       object_FIFO.pixels_left = 8 - offset
-      break
     }
   }
 }

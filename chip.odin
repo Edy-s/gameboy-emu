@@ -1,9 +1,28 @@
 package main
 
 ROM_data : []u8
+
 @(private="file")
 memory_map : [0xFFFF+1]u8
 raw_memory_map := memory_map[:]
+
+ROM_header : struct {
+  entry_point: [4]u8,
+  nintendo_logo: [48]u8,
+  game_title: [16]u8,
+  license_code: [2]u8,
+  sgb_flag: u8,
+  
+  cart_type: u8,
+  rom_size: u8,
+  ram_size: u8,
+  
+  country_code: u8,
+  old_license_code: u8,
+  rom_version: u8,
+  header_checksum: u8,
+  global_checksum: [2]u8
+}
 
 init_memory :: proc() -> bool {
   filename: string
@@ -161,6 +180,11 @@ write_at :: proc(address: u16, data: u8) {
     return
   }
   
+  if address >= 0xA000 && address <= 0xBFFF {
+    RAM_banks[MBC_state.ram_bank][address & 0x1FFF] = data
+    return
+  }
+  
   memory_map[address] = data
 }
 
@@ -178,7 +202,7 @@ read_at :: proc(address: u16) -> u8 {
     return ROM_data[address]
   }
   if address >= 0x4000 && address <= 0x7FFF {
-    ROM_address := u32(address & 0x3FFF) // Only take the first 12 bits
+    ROM_address := u32(address & 0x3FFF) // Only take the first 13 bits
     ROM_address |= u32(MBC_state.rom_bank) << 14
     ROM_address |= u32(MBC_state.upper_bank) << 19
     
@@ -186,7 +210,7 @@ read_at :: proc(address: u16) -> u8 {
   }
   
   if address >= 0xA000 && address <= 0xBFFF {
-    panic("Cart RAM access unimplemented.")
+    return RAM_banks[MBC_state.ram_bank][address & 0x1FFF]
   }
   
   return memory_map[address]
@@ -201,27 +225,10 @@ get_byte_as_flags :: proc($T: typeid, address: u16) -> ^T {
 // -- Memory Bank Controller
 //
 
-supported_MBCs := [?]u8{0x00, 0x01}
-
-ROM_header : struct {
-  entry_point: [4]u8,
-  nintendo_logo: [48]u8,
-  game_title: [16]u8,
-  license_code: [2]u8,
-  sgb_flag: u8,
-  
-  cart_type: u8,
-  rom_size: u8,
-  ram_size: u8,
-  
-  country_code: u8,
-  old_license_code: u8,
-  rom_version: u8,
-  header_checksum: u8,
-  global_checksum: [2]u8
-}
+supported_MBCs := [?]u8{0x00, 0x01, 0x02, 0x03}
 
 RAM_banks: [16][8192]u8
+
 MBC_state : struct {
   rom_bank: u8,
   ram_bank: u8,
@@ -244,13 +251,13 @@ write_to_MBC :: proc(address: u16, data: u8) {
   case address >= 0x2000 && address <= 0x3FFF:
     rom_bits := data & 0x1F
     if rom_bits == 0 { rom_bits = 1 }
-    if ROM_header.ram_size < 0x05 { rom_bits &= 0xF }
+    // if ROM_header.rom_size < 0x05 { rom_bits &= 0xF }
     MBC_state.rom_bank = rom_bits
     
   case address >= 0x4000 && address <= 0x5FFF:
     ram_bits := data & 0x3
     if ram_bits != 0 {
-      assert(ROM_header.ram_size > 0x02, "Attempted to switch ram bank when there are no ram banks defined in ROM header.")
+      // assert(ROM_header.ram_size >= 0x02, "Attempted to switch ram bank when there are no ram banks defined in ROM header.")
       MBC_state.ram_bank = ram_bits
     }
     
