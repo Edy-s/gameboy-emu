@@ -1,5 +1,6 @@
 package main
 
+ROM_data : []u8
 @(private="file")
 memory_map : [0xFFFF+1]u8
 raw_memory_map := memory_map[:]
@@ -17,10 +18,23 @@ init_memory :: proc() -> bool {
     print("Couldn't read file!\n")
     return false
   }
+  ROM_data = file
+  header_type :: type_of(ROM_header)
+  ROM_header = mem.slice_data_cast([]header_type, ROM_data[0x0100:0x0150])[0]
   
-  assert(len(file[:])-1 == 0x7FFF)
-  copy(memory_map[0x0000:0x7FFF], file[:])
+  supported := false
+  for sup in supported_MBCs {
+    if ROM_header.cart_type == sup {
+      supported = true
+      break
+    }
+  }
+  if !supported {
+    print("Unsupported ROM type - %2x.\n", ROM_header.cart_type)
+    return false
+  }
   
+  MBC_state.rom_bank = 1
   raw_memory_map[rg.INPUT] = 0xFF
   
   return true
@@ -143,7 +157,7 @@ write_at :: proc(address: u16, data: u8) {
   }
   
   if address < 0x8000 {
-    // TODO: MBC handling
+    write_to_MBC(address, data)
     return
   }
   
@@ -157,15 +171,97 @@ read_at :: proc(address: u16) -> u8 {
     intr.debug_trap()
   }
   
-  if address == 0xFF40 { 
-    data := 123
-    data += 1
+  if address <= 0x3FFF {
+    ROM_address := u32(address)
+    ROM_address |= u32(MBC_state.upper_bank) << 19
+    
+    return ROM_data[address]
   }
+  if address >= 0x4000 && address <= 0x7FFF {
+    ROM_address := u32(address & 0x3FFF) // Only take the first 12 bits
+    ROM_address |= u32(MBC_state.rom_bank) << 14
+    ROM_address |= u32(MBC_state.upper_bank) << 19
+    
+    return ROM_data[ROM_address]
+  }
+  
+  if address >= 0xA000 && address <= 0xBFFF {
+    panic("Cart RAM access unimplemented.")
+  }
+  
   return memory_map[address]
 }
 
 get_byte_as_flags :: proc($T: typeid, address: u16) -> ^T {
   return transmute(^T)&memory_map[address]
+}
+
+
+//
+// -- Memory Bank Controller
+//
+
+supported_MBCs := [?]u8{0x00, 0x01}
+
+ROM_header : struct {
+  entry_point: [4]u8,
+  nintendo_logo: [48]u8,
+  game_title: [16]u8,
+  license_code: [2]u8,
+  sgb_flag: u8,
+  
+  cart_type: u8,
+  rom_size: u8,
+  ram_size: u8,
+  
+  country_code: u8,
+  old_license_code: u8,
+  rom_version: u8,
+  header_checksum: u8,
+  global_checksum: [2]u8
+}
+
+RAM_banks: [16][8192]u8
+MBC_state : struct {
+  rom_bank: u8,
+  ram_bank: u8,
+  upper_bank: u8,
+  
+  ram_enabled: bool,
+  banking_mode: bool,
+}
+
+write_to_MBC :: proc(address: u16, data: u8) {
+  switch {
+  case address <= 0x1FFF:
+    // assert(ROM_header.ram_size != 0, "Attempted to toggle ram when ram size is 0 in ROM header.")
+    if (data & 0xF) == 0xA {
+      MBC_state.ram_enabled = true
+    } else {
+      MBC_state.ram_enabled = false
+    }
+    
+  case address >= 0x2000 && address <= 0x3FFF:
+    rom_bits := data & 0x1F
+    if rom_bits == 0 { rom_bits = 1 }
+    if ROM_header.ram_size < 0x05 { rom_bits &= 0xF }
+    MBC_state.rom_bank = rom_bits
+    
+  case address >= 0x4000 && address <= 0x5FFF:
+    ram_bits := data & 0x3
+    if ram_bits != 0 {
+      assert(ROM_header.ram_size > 0x02, "Attempted to switch ram bank when there are no ram banks defined in ROM header.")
+      MBC_state.ram_bank = ram_bits
+    }
+    
+    if MBC_state.banking_mode {
+      upper_bank_bits := (data & 0x60) >> 5 // bits 5 and 6
+      MBC_state.upper_bank = upper_bank_bits
+    }
+      
+  case address >= 0x6000 && address <= 0x7FFF:
+    MBC_state.banking_mode = data != 0
+  }
 }
 
 
@@ -179,5 +275,6 @@ oam_dma: struct {
 timer_overflew: bool
 
 import "core:os"
+import "core:mem"
 import rg "memory_regions"
 import rl "vendor:raylib"
