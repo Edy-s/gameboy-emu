@@ -291,12 +291,12 @@ Object :: struct {
   pos: V2,
   tile_index: u8,
   flags: bit_field u8 {
-    priority: bool    | 1,
-    y_flip: bool      | 1,
-    x_flip: bool      | 1,
-    dmg_palette: bool | 1,
+    cbg_palette: u8   | 3,
     bank: bool        | 1,
-    cbg_palette: u8   | 3
+    dmg_palette: bool | 1,
+    x_flip: bool      | 1,
+    y_flip: bool      | 1,
+    priority: bool    | 1,
   }
 }
 
