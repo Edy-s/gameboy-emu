@@ -34,6 +34,9 @@ do_chip_tick :: proc() {
     if oam_dma.index == 160 { oam_dma.active = false }
   }
   
+  //
+  // -- Timer
+  //
   if (cycle_index % 256) == 0 {
     memory_map[rg.TIMER_DIV] += 1
   }
@@ -66,6 +69,59 @@ do_chip_tick :: proc() {
         memory_map[rg.TIMER_COUNT] = timer
       }
     }
+  }
+  
+  
+  //
+  // -- Input
+  //
+  input := raw_memory_map[rg.INPUT]
+  input |= 0xF
+  debug_shite := 0
+  if (input & 0x20) == 0 { 
+    switch {
+    case rl.IsKeyDown(.Z):
+      input &= ~u8(0b1) // A
+      debug_shite += 1
+      
+    case rl.IsKeyDown(.X):
+      input &= ~u8(0b10) // B
+      debug_shite += 1
+      
+    case rl.IsKeyDown(.A):
+      input &= ~u8(0b1000) // start
+      debug_shite += 1
+      
+    case rl.IsKeyDown(.S):
+      input &= ~u8(0b100) // select
+      debug_shite += 1
+      
+    }
+  } else if (input & 0x10) == 0 {
+    switch {
+    case rl.IsKeyDown(.UP):
+      input &= ~u8(0b100)
+      debug_shite += 1
+      
+    case rl.IsKeyDown(.DOWN):
+      input &= ~u8(0b1000)
+      debug_shite += 1
+      
+    case rl.IsKeyDown(.LEFT):
+      input &= ~u8(0b10)
+      debug_shite += 1
+      
+    case rl.IsKeyDown(.RIGHT):
+      input &= ~u8(0b1)
+      debug_shite += 1
+      
+    }
+  }
+  raw_memory_map[rg.INPUT] = input
+  
+  if ~(input & 0xF) == 0 {
+    i_flags := get_byte_as_flags(rg.Interrupt_Flags, rg.INTERRUPT_FLAGS)
+    i_flags^ |= {.Joypad}
   }
 }
 
@@ -112,9 +168,6 @@ get_byte_as_flags :: proc($T: typeid, address: u16) -> ^T {
   return transmute(^T)&memory_map[address]
 }
 
-// set_flags_as_byte :: proc(flags: $T, address: u16) {
-//   memory_map[address] = transmute(u8)flags
-// }
 
 // @(private="file")
 oam_dma: struct {
@@ -127,3 +180,4 @@ timer_overflew: bool
 
 import "core:os"
 import rg "memory_regions"
+import rl "vendor:raylib"

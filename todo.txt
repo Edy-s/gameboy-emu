@@ -1,4 +1,10 @@
 Passing tests: (https://github.com/retrio/gb-test-roms)
-cpu_instr: 
-  01, 03, 04, 05, 06, 07, 08, 09, 10, 11
-  not 02 !
+  cpu_instr: all
+  mem_timing: all
+  instr_timing: all
+
+window rendering
+mbc handling
+sound
+
+cgb?

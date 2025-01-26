@@ -80,10 +80,8 @@ do_CPU_tick :: proc() -> (valid: bool) {
       tick_done = true
     } else if command_buffer[0].type == .halt {
       if !instr_state.halted { log_for_doc() }
-      instr_state.halted = true
-      toggles := get_byte_as_flags(rg.Interrupt_Flags, rg.INTERRUPT_TOGGLES)
-      tg_byte := raw_memory_map[rg.INTERRUPT_TOGGLES]
       
+      instr_state.halted = true
       if (raw_memory_map[rg.INTERRUPT_FLAGS] & raw_memory_map[rg.INTERRUPT_TOGGLES]) != 0 {
         command_index += 1
       }

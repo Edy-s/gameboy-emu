@@ -2,29 +2,23 @@ package main
 
 import "core:os"
 import "core:fmt"
-import "core:mem"
 import "core:strings"
 print :: fmt.printf
 import rl "vendor:raylib"
 
-import rg "memory_regions"
+// import rg "memory_regions"
 
 cycle_index := 0
 
 
 main :: proc() {
 
-  serial_data: [dynamic]u8
+  // serial_data: [dynamic]u8
   init_log()
   
-  RUN_GAPS :: 3_000_000
-  // execution_cutoff := RUN_GAPS
-  serial_finish := 100_000_000
-  
-  
+  ok := init_memory()
   init_GPU()
   init_CPU()
-  ok := init_memory()
   if !ok { return }
   
   log_for_doc()
@@ -43,57 +37,6 @@ main :: proc() {
     
     
     if rl.WindowShouldClose() { running = false }
-    if number_of_instructions_executed_succesfully > serial_finish { running = false }
-    
-    input := raw_memory_map[rg.INPUT]
-    input |= 0xF
-    debug_shite := 0
-    if (input & 0x20) == 0 { 
-      switch {
-      case rl.IsKeyDown(.Z):
-        input &= ~u8(0b1) // A
-        debug_shite += 1
-        
-      case rl.IsKeyDown(.X):
-        input &= ~u8(0b10) // B
-        debug_shite += 1
-        
-      case rl.IsKeyDown(.A):
-        input &= ~u8(0b1000) // start
-        debug_shite += 1
-        
-      case rl.IsKeyDown(.S):
-        input &= ~u8(0b100) // select
-        debug_shite += 1
-        
-      }
-    } else if (input & 0x10) == 0 {
-      switch {
-      case rl.IsKeyDown(.UP):
-        input &= ~u8(0b100)
-        debug_shite += 1
-        
-      case rl.IsKeyDown(.DOWN):
-        input &= ~u8(0b1000)
-        debug_shite += 1
-        
-      case rl.IsKeyDown(.LEFT):
-        input &= ~u8(0b10)
-        debug_shite += 1
-        
-      case rl.IsKeyDown(.RIGHT):
-        input &= ~u8(0b1)
-        debug_shite += 1
-        
-      }
-    }
-    raw_memory_map[rg.INPUT] = input
-    
-    if ~(input & 0xF) == 0 {
-      i_flags := get_byte_as_flags(rg.Interrupt_Flags, rg.INTERRUPT_FLAGS)
-      i_flags^ |= {.Joypad}
-    }
-    
     
     
     /*

@@ -9,7 +9,7 @@ log_line: int
 do_logging: bool
 
 init_log :: proc() {
-  gb_doc_log := strings.builder_make()
+  gb_doc_log = strings.builder_make()
 }
 
 log_instr :: proc() {
@@ -43,7 +43,7 @@ log_instr :: proc() {
       r16stk := r16stk_mapping[val]
       printout[to_print] = r16stk
     case .r16mem:
-      r16mem, change := r16mem_mapping(val)
+      r16mem, _ := r16mem_mapping(val)
       if      val == 2 { printout[to_print] = "HL+" }
       else if val == 3 { printout[to_print] = "HL-" }
       else { printout[to_print] = r16mem }

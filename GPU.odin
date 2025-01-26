@@ -4,6 +4,7 @@ gpu_state : struct {
   mode: enum {OAM_SCAN, PRE_DRAW, DRAWING, H_BLANK, RENDER, V_BLANK},
   dot_index: int,
   frame_dot_index: int,
+  skip_frame: bool,
   
   palettes: struct {
     bg, obj0, obj1: u8
@@ -20,7 +21,15 @@ LCD_HEIGHT :: 144
 RENDER_MULTIPLE :: 4
 
 init_GPU :: proc() {
-  rl.InitWindow(LCD_WIDTH * RENDER_MULTIPLE, LCD_HEIGHT * RENDER_MULTIPLE, "emulator")
+  name_from_rom := raw_memory_map[0x0134:0x0143]
+  for c, i in name_from_rom {
+    if c == 0 {
+      name_from_rom = name_from_rom[:i]
+      break
+    }
+  }
+  title := fmt.tprintf("GBM Emulator - %v", string(name_from_rom))
+  rl.InitWindow(LCD_WIDTH * RENDER_MULTIPLE, LCD_HEIGHT * RENDER_MULTIPLE, strings.clone_to_cstring(title))
   rl.SetTargetFPS(60)
   target_image   = rl.GenImageColor(LCD_WIDTH, LCD_HEIGHT, rl.WHITE)
   target_texture = rl.LoadTextureFromImage(target_image)
@@ -36,6 +45,7 @@ video_ram := raw_memory_map[rg.VIDEO_RAM_START : rg.VIDEO_RAM_END]
 
 do_GPU_tick :: proc() -> (success: bool) {
   current_line := raw_memory_map[rg.LCD_Y_COORD]
+  if !gpu_state.skip_frame && .LCD_enable not_in lcd_control { gpu_state.skip_frame = true }
   
   switch gpu_state.mode {
   case .OAM_SCAN:
@@ -48,7 +58,7 @@ do_GPU_tick :: proc() -> (success: bool) {
         
         test_line := current_line + 16
         
-        if obj.pos.y != 0 && lo_y >= test_line && test_line > hi_y {
+        if obj.pos.y != 0 && lo_y > test_line && test_line >= hi_y {
           gpu_state.line_objects[gpu_state.object_count] = obj
           gpu_state.object_count += 1
         }
@@ -75,7 +85,9 @@ do_GPU_tick :: proc() -> (success: bool) {
     }
     bg_col := pop_pixel(&background_FIFO).color
     
-    if pusher_x < 160 {
+    // if  { return true }
+    
+    if pusher_x < 160 && !gpu_state.skip_frame {
       get_object_data(current_line)
       obj_pix := pop_pixel(&object_FIFO)
       
@@ -83,6 +95,14 @@ do_GPU_tick :: proc() -> (success: bool) {
       obj_final_col := (obj_palette >> (obj_pix.color * 2)) & 0b11 
       bg_final_col := (gpu_state.palettes.bg >> (bg_col * 2)) & 0b11
       
+      final_col := bg_final_col
+      if obj_pix.color != 0 {
+        if obj_pix.under_background && bg_col != 0 {
+          final_col = obj_final_col
+        } else {
+          final_col = obj_final_col
+        }
+      }
       final_pixel := obj_pix.color != 0 ? obj_final_col : bg_final_col
       
       gpu_state.pixels[current_line][pusher_x] = final_pixel
@@ -99,7 +119,7 @@ do_GPU_tick :: proc() -> (success: bool) {
       gpu_state.object_count = 0
       current_line += 1
       gpu_state.mode = .OAM_SCAN
-      if current_line == 143 {
+      if current_line == 144 {
         gpu_state.mode = .RENDER
       }
       gpu_state.dot_index = -1
@@ -109,11 +129,14 @@ do_GPU_tick :: proc() -> (success: bool) {
     rl.BeginDrawing()
     rl.ClearBackground(rl.PINK)
     
-    for px_line, y in gpu_state.pixels {
-      for px, x in px_line {
-        base := 50 + px * 40
-        col := rl.Color{base, base, base, 255}
-        rl.ImageDrawPixel(&target_image, auto_cast x, auto_cast y, col)
+    if !gpu_state.skip_frame {
+      for px_line, y in gpu_state.pixels {
+        for px, x in px_line {
+          base := 50 + px * 40
+          base = 255 - base
+          col := rl.Color{base - 25, base, base - 25, 255}
+          rl.ImageDrawPixel(&target_image, auto_cast x, auto_cast y, col)
+        }
       }
     }
     rl.UpdateTexture(target_texture, target_image.data)
@@ -136,7 +159,6 @@ do_GPU_tick :: proc() -> (success: bool) {
       gpu_state.dot_index = -1
     }
     if current_line > 153 {
-      if .LCD_enable not_in lcd_control { break }
       current_line = 0
       gpu_state = {}
       gpu_state.dot_index = -1
@@ -188,16 +210,22 @@ get_tile_data :: proc(current_line: u8) {
   if .bg_tile_map_area in lcd_control { tile_index += 0x0400 }
   
   tile_address := tile_index | rg.TILE_MAP_OFFSET
-  
   tile_data_index := u16(video_ram[tile_address])
   
-  tile_data_address := tile_data_index << 4
+  tile_data_address: u16
+  if .bg_window_tile_data_area not_in lcd_control {
+    tile_data_index = u16(i16(i8(tile_data_index)))
+    tile_data_address |= 0x1000
+    // tile_data_address += tile_data_index_signed
+  }
+  
+  tile_data_address += tile_data_index << 4
   tile_data_address |= (u16(cam_y) & 0x7) << 1
   
-  if .bg_window_tile_data_area not_in lcd_control { 
-    tile_data_address ~= 0x0080
-    tile_data_address |= 0x0800
-  }
+  // if .bg_window_tile_data_area not_in lcd_control { 
+  //   tile_data_address ~= 0x0200
+  //   tile_data_address |= 0x0800
+  // }
   
   lsb := video_ram[tile_data_address]
   msb := video_ram[tile_data_address+1]
@@ -219,8 +247,8 @@ get_object_data :: proc(current_line: u8) {
     offset = 8 - pusher_x
   }
   
-  for i in 0..<gpu_state.object_count {
-    obj := gpu_state.line_objects[i]
+  for obj_index in 0..<gpu_state.object_count {
+    obj := gpu_state.line_objects[obj_index]
     if obj.pos.x + offset == x_pos {
       tile_index := obj.tile_index
       obj_height := (.obj_size in lcd_control) ? 16 : 8
@@ -249,7 +277,7 @@ get_object_data :: proc(current_line: u8) {
         if fifo_px.color == 0 {
           fifo_px.color = pix.color
           fifo_px.palette = obj.flags.dmg_palette ? 1 : 0
-          fifo_px.backgroud_prio = obj.flags.priority
+          fifo_px.under_background = obj.flags.priority
         }
       }
       object_FIFO.pixels_left = 8 - offset
@@ -278,7 +306,7 @@ Pixel :: bit_field u8 {
   color: u8            | 2,
   palette: u8          | 4,
   sprite_prio: bool    | 1, // used in color gameboy
-  backgroud_prio: bool | 1,
+  under_background: bool | 1,
 }
 
 object_FIFO:     FIFO_Device
@@ -288,6 +316,7 @@ FIFO_Device :: struct {
   pixels: [8]Pixel,
   pixels_left: u8,
 }
+
 pop_pixel :: proc(device: ^FIFO_Device) -> Pixel {
   result := device.pixels[0]
   for i in 0..<7 {
@@ -298,15 +327,11 @@ pop_pixel :: proc(device: ^FIFO_Device) -> Pixel {
   return result
 }
 
-gpu_vars : struct {
-  bg_viewport: V2,
-  window: V2,
-  OAM_DMA: ^u8,
-}
-
 lcd_control: ^rg.LCD_Control_Byte = get_byte_as_flags(rg.LCD_Control_Byte, rg.LCD_CONTROL)
 
 
 import "core:mem"
 import rl "vendor:raylib"
 import rg "memory_regions"
+import "core:fmt"
+import "core:strings"

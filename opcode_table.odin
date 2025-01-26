@@ -101,7 +101,7 @@ opcode_table_v2 := [?]Op_Encoding_V2{
   {"ret",    B("11001001"), {clock, pop, pop, store_reg(.pc)}, {4, 4}}, // 4clocks
   {"reti",   B("11011001"), {clock, pop, pop, store_reg(.pc), set_i}, {4, 4}}, // 4clocks
   
-  {"jp %v, word %4x", B("110c_010"), {next, next, check_condition, store_reg(.pc)}, {3, 4}}, // 3-4clocks
+  {"jp %v, word %4x", B("110c_010"), {next, next, check_condition, store_reg(.pc), clock}, {3, 4}}, // 3-4clocks
   {"jp word %4x",     B("11000011"), {next, next, store_reg(.pc), clock}, {4, 4}}, // 4clocks
   {"jp hl",           B("11101001"), {load_reg(.hl), store_reg(.pc)}, {1, 1}}, // 1clocks
   
