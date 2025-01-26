@@ -248,7 +248,7 @@ get_object_data :: proc(current_line: u8) {
       tile_address := u16(tile_index) * 16
       
       sprite_y := y_pos - obj.pos.y
-      if obj.flags.y_flip { sprite_y = ~sprite_y }
+      if obj.flags.y_flip { sprite_y = u8(obj_height) - sprite_y }
       sprite_y &= 0b1111
       
       tile_address += u16(sprite_y) * 2
