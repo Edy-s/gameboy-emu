@@ -74,7 +74,9 @@ do_GPU_tick :: proc() -> (success: bool) {
       
       pusher_x = 0
       get_tile_data(current_line)
-      // pusher_x += raw_memory_map[rg.BACKGROUND_X]
+      for _ in 0..<raw_memory_map[rg.BACKGROUND_X] % 8 {
+        pop_pixel(&background_FIFO)
+      }
     } else if gpu_state.dot_index == 92 {
       gpu_state.mode = .DRAWING
     }
@@ -83,11 +85,9 @@ do_GPU_tick :: proc() -> (success: bool) {
     if background_FIFO.pixels_left == 0 {
       get_tile_data(current_line)
     }
-    bg_col := pop_pixel(&background_FIFO).color
-    
-    // if  { return true }
-    
     if pusher_x < 160 && !gpu_state.skip_frame {
+      bg_col := pop_pixel(&background_FIFO).color
+      
       get_object_data(current_line)
       obj_pix := pop_pixel(&object_FIFO)
       
@@ -216,16 +216,10 @@ get_tile_data :: proc(current_line: u8) {
   if .bg_window_tile_data_area not_in lcd_control {
     tile_data_index = u16(i16(i8(tile_data_index)))
     tile_data_address |= 0x1000
-    // tile_data_address += tile_data_index_signed
   }
   
   tile_data_address += tile_data_index << 4
   tile_data_address |= (u16(cam_y) & 0x7) << 1
-  
-  // if .bg_window_tile_data_area not_in lcd_control { 
-  //   tile_data_address ~= 0x0200
-  //   tile_data_address |= 0x0800
-  // }
   
   lsb := video_ram[tile_data_address]
   msb := video_ram[tile_data_address+1]
