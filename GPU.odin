@@ -87,7 +87,7 @@ do_GPU_tick :: proc() -> (success: bool) {
     }
     
   case .DRAWING:
-    if !gpu_state.drawing_window && pusher_x >= raw_memory_map[rg.WINDOW_X] + 7 && current_line >= raw_memory_map[rg.WINDOW_Y] {
+    if !gpu_state.drawing_window && pusher_x + 7 >= raw_memory_map[rg.WINDOW_X] && current_line >= raw_memory_map[rg.WINDOW_Y] {
       background_FIFO.pixels_left = 0
       gpu_state.drawing_window = true
     }
