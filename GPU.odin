@@ -73,6 +73,9 @@ do_GPU_tick :: proc() -> (success: bool) {
       gpu_state.palettes.obj1 = raw_memory_map[rg.OBJ_1_PALETTE]
       
       pusher_x = 0
+      background_FIFO = {}
+      object_FIFO = {}
+      
       get_tile_data(current_line)
       for _ in 0..<raw_memory_map[rg.BACKGROUND_X] % 8 {
         pop_pixel(&background_FIFO)
@@ -96,16 +99,11 @@ do_GPU_tick :: proc() -> (success: bool) {
       bg_final_col := (gpu_state.palettes.bg >> (bg_col * 2)) & 0b11
       
       final_col := bg_final_col
-      if obj_pix.color != 0 {
-        if obj_pix.under_background && bg_col != 0 {
-          final_col = obj_final_col
-        } else {
-          final_col = obj_final_col
-        }
+      if obj_pix.color != 0 && !(obj_pix.under_background && bg_col != 0) {
+        final_col = obj_final_col
       }
-      final_pixel := obj_pix.color != 0 ? obj_final_col : bg_final_col
       
-      gpu_state.pixels[current_line][pusher_x] = final_pixel
+      gpu_state.pixels[current_line][pusher_x] = final_col
       
     }
     if pusher_x == 160 {
@@ -236,13 +234,13 @@ get_object_data :: proc(current_line: u8) {
   x_pos := pusher_x + 8
   y_pos := current_line
   
-  offset: u8
-  if pusher_x < 8 {
-    offset = 8 - pusher_x
-  }
-  
   for obj_index in 0..<gpu_state.object_count {
     obj := gpu_state.line_objects[obj_index]
+    offset: u8
+    if obj.pos.x < 8 {
+      offset = 8 - obj.pos.x
+    }
+    
     if obj.pos.x + offset == x_pos {
       tile_index := obj.tile_index
       obj_height := (.obj_size in lcd_control) ? 16 : 8
