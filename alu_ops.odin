@@ -293,9 +293,14 @@ do_alu :: proc(command: Command, opcode: Opcode) -> (bool, int) {
     case .ADD:
       assert(action.has_rhs)
       rhs := get_stash_word()
-      small_rhs := u8(rhs & 0xFF)
-      lsb, lsc := real_addition(u8(lhs), small_rhs)
-      msb, carries := real_addition(u8(lhs >> 8), u8(rhs >> 8), pre_carry = lsc[7])
+      rhs_lsb := u8(rhs & 0xFF)
+      rhs_msb := u8(rhs >> 8)
+      
+      lhs_lsb := u8(lhs & 0xFF)
+      lhs_msb := u8(lhs >> 8)
+      
+      lsb, lsb_c   := real_addition(lhs_lsb, rhs_lsb)
+      msb, carries := real_addition(lhs_msb, rhs_msb, pre_carry = lsb_c[7])
       
       result := (u16(msb) << 8) | u16(lsb)
       

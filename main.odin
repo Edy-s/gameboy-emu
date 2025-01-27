@@ -10,10 +10,7 @@ import rl "vendor:raylib"
 
 cycle_index := 0
 
-
 main :: proc() {
-
-  // serial_data: [dynamic]u8
   init_log()
   
   ok := init_memory()
@@ -35,29 +32,9 @@ main :: proc() {
     
     cycle_index += 1
     
-    
     if rl.WindowShouldClose() { running = false }
     
-    
-    /*
-    if number_of_instructions_executed_succesfully > execution_cutoff {
-      print("x to stop: ")
-      in_thing: [10]u8
-      os.read(os.stdin, in_thing[:])
-      if in_thing[0] == 'x' { running = false }
-      execution_cutoff += RUN_GAPS
-    }*/
-    
-    // if !oam_dma.active && read_at(0xFF02) & 0x80 != 0 {
-    //   print("%c", read_at(0xFF01))
-    //   append(&serial_data, read_at(0xFF01))
-      
-    //   pass_string := "Passed"
-    //   pass_u8 := transmute([]u8)pass_string
-    //   if len(serial_data) > 9 && mem.compare(serial_data[len(serial_data) - 7 : len(serial_data) - 1], pass_u8) == 0 { serial_finish = number_of_instructions_executed_succesfully + 100000000 }
-    //   byte := read_at(0xFF02)
-    //   write_at(0xFF02, byte & (~u8(0x80)))
-    // }
+    read_serial()
   }
   print("Cycles/s: %4f\n", f64(cycle_index) / (rl.GetTime() - start))
   if strings.builder_len(gb_doc_log) > 0 { os.write_entire_file("doctor.log", transmute([]u8)strings.to_string(gb_doc_log)) }

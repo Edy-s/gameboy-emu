@@ -1,12 +1,10 @@
 package main
 
-import "core:strings"
-import "core:os"
-
 gb_doc_log: strings.Builder
 log_line: int
 
 do_logging: bool
+serial_reading_active: bool
 
 init_log :: proc() {
   gb_doc_log = strings.builder_make()
@@ -129,3 +127,22 @@ log_for_doc :: proc() {
   strings.write_string(sb, "\n")
   // fmt.sbprintf(sb, "A:%2x F:%2x B:%2x C:%2x D:%2x E:%2x H:%2x L:%2x SP:%4x PC:%4x PCMEM:%2x,%2x,%2x,%2x\n", regs.byte[.A], regs.byte[.F], regs.byte[.B], regs.byte[.C], regs.byte[.D], regs.byte[.E], regs.byte[.H], regs.byte[.L], regs.word[.SP], regs.word[.PC], read_at(pc), memory_map[pc+1], memory_map[pc+2], memory_map[pc+3])
 }
+
+
+serial_data: [dynamic]u8
+read_serial :: proc() {
+  if serial_reading_active && !oam_dma.active && read_at(0xFF02) & 0x80 != 0 {
+    print("%c", read_at(0xFF01))
+    append(&serial_data, read_at(0xFF01))
+    
+    pass_string := "Passed"
+    pass_u8 := transmute([]u8)pass_string
+    // if len(serial_data) > 9 && mem.compare(serial_data[len(serial_data) - 7 : len(serial_data) - 1], pass_u8) == 0 { serial_finish = number_of_instructions_executed_succesfully + 100000000 }
+    byte := read_at(0xFF02)
+    write_at(0xFF02, byte & (~u8(0x80)))
+  }
+}
+
+import "core:strings"
+import "core:os"
+import "core:mem"

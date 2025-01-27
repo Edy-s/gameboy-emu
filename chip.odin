@@ -110,44 +110,28 @@ do_chip_tick :: proc() {
   //
   input := raw_memory_map[rg.INPUT]
   input |= 0xF
-  debug_shite := 0
   if (input & 0x20) == 0 { 
     switch {
     case rl.IsKeyDown(.Z):
       input &= ~u8(0b1) // A
-      debug_shite += 1
-      
     case rl.IsKeyDown(.X):
       input &= ~u8(0b10) // B
-      debug_shite += 1
-      
     case rl.IsKeyDown(.A):
       input &= ~u8(0b1000) // start
-      debug_shite += 1
-      
     case rl.IsKeyDown(.S):
       input &= ~u8(0b100) // select
-      debug_shite += 1
       
     }
   } else if (input & 0x10) == 0 {
     switch {
     case rl.IsKeyDown(.UP):
       input &= ~u8(0b100)
-      debug_shite += 1
-      
     case rl.IsKeyDown(.DOWN):
       input &= ~u8(0b1000)
-      debug_shite += 1
-      
     case rl.IsKeyDown(.LEFT):
       input &= ~u8(0b10)
-      debug_shite += 1
-      
     case rl.IsKeyDown(.RIGHT):
       input &= ~u8(0b1)
-      debug_shite += 1
-      
     }
   }
   raw_memory_map[rg.INPUT] = input

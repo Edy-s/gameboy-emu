@@ -2,8 +2,11 @@ package main
 
 gpu_state : struct {
   mode: enum {OAM_SCAN, PRE_DRAW, DRAWING, H_BLANK, RENDER, V_BLANK},
-  dot_index: int,
+  
+  // "dot" is how a cycle is referred to in the graphics pipeline.
+  line_dot_index: int,
   frame_dot_index: int,
+  
   skip_frame: bool,
   
   drawing_window: bool,
@@ -51,8 +54,8 @@ do_GPU_tick :: proc() -> (success: bool) {
   
   switch gpu_state.mode {
   case .OAM_SCAN:
-    if gpu_state.dot_index % 2 == 0 && gpu_state.object_count < 10 {
-      obj := objects[gpu_state.dot_index / 2]
+    if gpu_state.line_dot_index % 2 == 0 && gpu_state.object_count < 10 {
+      obj := objects[gpu_state.line_dot_index / 2]
       if obj != {} {
         obj_height :u8= (.obj_size in lcd_control) ? 16 : 8
         lo_y := obj.pos.y + obj_height
@@ -66,10 +69,10 @@ do_GPU_tick :: proc() -> (success: bool) {
         }
       }
     }
-    if gpu_state.dot_index == 79 { gpu_state.mode = .PRE_DRAW }
+    if gpu_state.line_dot_index == 79 { gpu_state.mode = .PRE_DRAW }
   
   case .PRE_DRAW:
-    if gpu_state.dot_index == 80 {
+    if gpu_state.line_dot_index == 80 {
       gpu_state.palettes.bg   = raw_memory_map[rg.BG_PALETTE]
       gpu_state.palettes.obj0 = raw_memory_map[rg.OBJ_0_PALETTE]
       gpu_state.palettes.obj1 = raw_memory_map[rg.OBJ_1_PALETTE]
@@ -82,7 +85,7 @@ do_GPU_tick :: proc() -> (success: bool) {
       for _ in 0..<raw_memory_map[rg.BACKGROUND_X] % 8 {
         pop_pixel(&background_FIFO)
       }
-    } else if gpu_state.dot_index == 92 {
+    } else if gpu_state.line_dot_index == 92 {
       gpu_state.mode = .DRAWING
     }
     
@@ -119,7 +122,7 @@ do_GPU_tick :: proc() -> (success: bool) {
     pusher_x += 1
 
   case .H_BLANK:
-    if gpu_state.dot_index == 455 {
+    if gpu_state.line_dot_index == 455 {
       gpu_state.object_count = 0
       current_line += 1
       gpu_state.mode = .OAM_SCAN
@@ -127,7 +130,7 @@ do_GPU_tick :: proc() -> (success: bool) {
       if current_line == 144 {
         gpu_state.mode = .RENDER
       }
-      gpu_state.dot_index = -1
+      gpu_state.line_dot_index = -1
     }
     
   case .RENDER:
@@ -159,14 +162,14 @@ do_GPU_tick :: proc() -> (success: bool) {
     fallthrough
   
   case .V_BLANK:
-    if gpu_state.dot_index == 455 {
+    if gpu_state.line_dot_index == 455 {
       current_line += 1
-      gpu_state.dot_index = -1
+      gpu_state.line_dot_index = -1
     }
     if current_line > 153 {
       current_line = 0
       gpu_state = {}
-      gpu_state.dot_index = -1
+      gpu_state.line_dot_index = -1
       gpu_state.mode = .OAM_SCAN
     }
       
@@ -202,7 +205,7 @@ do_GPU_tick :: proc() -> (success: bool) {
     }
   }
   
-  gpu_state.dot_index += 1
+  gpu_state.line_dot_index  += 1
   gpu_state.frame_dot_index += 1
   return true
 }
